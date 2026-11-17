@@ -1,0 +1,18 @@
+name: Host C-ABI smoke and sanitizers
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Compile and execute under Clang (no release artifact)
+        run: make CC=clang test demo-test
+      - name: Address/undefined behavior sanitizers
+        run: make CC=clang sanitize
