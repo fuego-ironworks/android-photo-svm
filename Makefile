@@ -63,6 +63,7 @@ test-application: $(OUT)/photo_ilua
 	$(OUT)/lua/lua "$(LUA_SOURCE)/testes/symbolic-assignment.lua"
 	$(OUT)/photo_ilua "$(SHADER_BUNDLE)" "$(LUA_SOURCE)/testes/symbolic-assignment.lua"
 	$(OUT)/photo_ilua "$(SHADER_BUNDLE)" tests/rotations.ilua app/geometry.ilua
+	$(OUT)/photo_ilua "$(SHADER_BUNDLE)" tests/decisions.ilua app/decisions.ilua
 	$(OUT)/photo_ilua "$(SHADER_BUNDLE)" tests/policy.ilua app/classify.ilua included
 	sha256sum $(OUT)/photo_ilua $(OUT)/libphoto_math.a > $(OUT)/before-policy-edit.sha256
 	sed 's/policy.threshold ← 0/policy.threshold ← 15/' app/classify.ilua > $(OUT)/alternate.ilua
