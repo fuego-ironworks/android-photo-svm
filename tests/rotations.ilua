@@ -1,0 +1,47 @@
+assert(_VERSION = "Lua 5.5")
+local geometry ← dofile(assert(arg[1]))
+local descriptor ← λ(variance, basis)
+  return {representation ← "rotation-fixture/v1", space ← "euclidean-eight",
+          basis ← basis or "ordered-eight", metric ← "standard-euclidean",
+          scalar ← "f32", variance ← variance}
+end
+local coordinates ← λ(variance, values, basis)
+  return photo_native.coordinates(descriptor(variance, basis), values)
+end
+local near ← λ(actual, expected)
+  local copied ← photo_native.components(actual)
+  assert(#copied = #expected)
+  for index ← 1, #expected do assert(math.abs(copied[index] − expected[index]) < 0.0002) end
+end
+local e1 ← coordinates("covector", {1,0,0,0,0,0,0,0})
+local e2 ← coordinates("covector", {0,1,0,0,0,0,0,0})
+local diagonal12 ← coordinates("covector", {1,1,0,0,0,0,0,0})
+local diagonal23 ← coordinates("covector", {0,1,1,0,0,0,0,0})
+local turn12 ← geometry.two_reflections(e1, diagonal12)
+local turn23 ← geometry.two_reflections(e2, diagonal23)
+local original ← coordinates("vector", {1,2,3,4,5,6,7,8})
+local rotated ← geometry.apply(turn12, original)
+near(rotated, {−2,1,3,4,5,6,7,8})
+near(geometry.apply(geometry.inverse(turn12), rotated), {1,2,3,4,5,6,7,8})
+near(geometry.apply(geometry.two_reflections(e1,e1), original), {1,2,3,4,5,6,7,8})
+local unit1 ← coordinates("vector", {1,0,0,0,0,0,0,0})
+local composed ← geometry.compose(turn12, turn23)
+near(geometry.apply(composed, unit1), {0,0,1,0,0,0,0,0})
+near(geometry.apply(geometry.compose(turn23, turn12), unit1), {0,1,0,0,0,0,0,0})
+near(geometry.apply(geometry.inverse(composed), geometry.apply(composed, original)), {1,2,3,4,5,6,7,8})
+local transported_covector ← geometry.apply(turn12, e1)
+near(transported_covector, {0,1,0,0,0,0,0,0})
+local copied ← photo_native.components(original)
+copied[1] ← 999
+near(original, {1,2,3,4,5,6,7,8})
+assert(not pcall(photo_native.rotate8, unit1, diagonal12, original, false))
+assert(not pcall(photo_native.rotate8, e1, diagonal12, original, 0))
+local zero ← coordinates("covector", {0,0,0,0,0,0,0,0})
+assert(not pcall(photo_native.rotate8, zero, diagonal12, original, false))
+local other_basis ← coordinates("vector", {1,0,0,0,0,0,0,0}, "unrelated")
+assert(not pcall(geometry.apply, turn12, other_basis))
+assert(not pcall(geometry.apply, {}, original))
+assert(not pcall(photo_native.coordinates, descriptor("vector"), {"1",0,0,0,0,0,0,0}))
+collectgarbage("collect")
+near(geometry.apply(composed, unit1), {0,0,1,0,0,0,0,0})
+print("PASS modified iLua shared rotations: full vectors, identity, inverse, ordered composition, immutable transport and refusals")

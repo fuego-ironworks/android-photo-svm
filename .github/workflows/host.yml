@@ -1,0 +1,88 @@
+name: ICK iLua shared-mathematics acceptance
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  shared-mathematics:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      EGL_PLATFORM: surfaceless
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      IDRIS2: ${{ github.workspace }}/.idric-compiler-api/_/build/exec/idris2
+      IDRIS2_PREFIX: ${{ github.workspace }}/.idric-compiler-api/_/bootstrap-build
+      CHEZ: ${{ github.workspace }}/.idric-compiler-api/_/.tools/bin/scheme
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: isomorphisms/ai-ci/ick-host@618223d47315a180851c1539197cdcdb761a4b0d
+        id: ick
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: isomorphisms/lua
+          ref: 87306483cec50f8c750a22dda1d0742246fad756
+          path: .lua-source
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: fuego-ironworks/idris-shader-backend
+          ref: d8781df201e66561d63dcf04bfb1af6d0684fc95
+          path: .shader-source
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: isomorphisms/Idric
+          ref: 2734ac5a86610eddfab73b1644d72b4ac85a65ee
+          path: .idric-compiler-api
+          persist-credentials: false
+      - name: Install checked compiler and hosted GLES dependencies
+        run: sudo apt-get update && sudo apt-get install -y chezscheme glslang-tools libgmp-dev libegl-dev libgles-dev libgl1-mesa-dri
+      - name: Bootstrap pinned Idric with owned ICK support
+        working-directory: .idric-compiler-api
+        env:
+          CC: ${{ steps.ick.outputs.compiler }}
+          CFLAGS: -fno-link-libatomic -static-libgcc
+        run: |
+          test "$(git rev-parse HEAD)" = 2734ac5a86610eddfab73b1644d72b4ac85a65ee
+          ./edric bootstrap
+      - name: Install compiler API
+        working-directory: .idric-compiler-api/_
+        run: ${{ env.IDRIS2 }} --install idris2api.ipkg
+      - name: Compile shared mathematics from its owning checked source
+        run: |
+          make -C .shader-source -f tools/photo-math.mk generate
+          mkdir -p out/host
+          sha256sum "$IDRIS2" .shader-source/build/exec/idris2-glsles > out/host/shader-compiler.sha256
+      - name: Qualify literal Icky C and execute shared mathematics before iLua
+        run: make test-c mutants ICK="${{ steps.ick.outputs.compiler }}"
+      - name: Execute actual modified iLua, rotations and policy-only changes
+        run: make test-application ICK="${{ steps.ick.outputs.compiler }}" > out/host/application.log 2>&1 || { cat out/host/application.log; exit 1; }
+      - name: Show application acceptance
+        run: cat out/host/application.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: photo-shared-host-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            out/host/*.log
+            out/host/*.sha256
+            out/host/*.txt
+            out/host/*.tsv
+            out/host/*.map
+            .shader-source/build/photo-math
+          if-no-files-found: error
+  reference-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Preserve historical reference fixtures, not production acceptance
+        working-directory: reference
+        run: make CC=clang test demo-test sanitize

@@ -1,0 +1,29 @@
+-- Composition/policy only. Every nontrivial numerical map is shared upstream.
+local geometry ← {}
+local operations ← setmetatable({}, {__mode ← "k"})
+local make ← λ(forward, backward)
+  local handle ← {}
+  operations[handle] ← {forward ← forward, backward ← backward}
+  return handle
+end
+local checked ← λ(handle)
+  return assert(operations[handle], "not a geometry plan from this interface")
+end
+geometry.two_reflections ← λ(first_normal, second_normal)
+  return make(
+    λ(value) return photo_native.rotate8(first_normal, second_normal, value, false) end,
+    λ(value) return photo_native.rotate8(first_normal, second_normal, value, true) end)
+end
+geometry.apply ← λ(plan, value) return checked(plan).forward(value) end
+geometry.inverse ← λ(plan)
+  local operation ← checked(plan)
+  return make(operation.backward, operation.forward)
+end
+-- compose(first, second) means apply first, THEN second.
+geometry.compose ← λ(first, second)
+  local left ← checked(first)
+  local right ← checked(second)
+  return make(λ(value) return right.forward(left.forward(value)) end,
+              λ(value) return left.backward(right.backward(value)) end)
+end
+return geometry

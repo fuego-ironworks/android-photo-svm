@@ -1,0 +1,132 @@
+-- Bounded oblique decision trees over the existing shared pairing operation.
+-- No fitting, feature extraction, dot products or rotation arithmetic lives here.
+local decisions ← {}
+local plans ← setmetatable({}, {__mode ← "k"})
+local project ← assert(photo_native.project32)
+local mathematics_revision ← assert(photo_native.mathematics_revision)
+local node_limit ← 127
+local depth_limit ← 32
+
+local record ← λ(value)
+  assert(type(value) = "table" and getmetatable(value) = nil, "expected a plain record")
+  return value
+end
+local name ← λ(value)
+  assert(type(value) = "string" and #value > 0 and #value ≤ 160 and
+         not string.find(value, "\0", 1, true), "invalid identity")
+  return value
+end
+local finite ← λ(value)
+  assert(type(value) = "number" and value = value and
+         value > -math.huge and value < math.huge, "expected a finite threshold")
+  return value
+end
+local fields ← λ(value, allowed)
+  record(value)
+  for key in pairs(value) do assert(allowed[key], "unexpected record field") end
+end
+local target ← λ(value)
+  fields(value, {image_sha256 ← true, region_id ← true, region_revision ← true})
+  local image ← name(value.image_sha256)
+  assert(#image = 64 and not string.find(image, "[^0-9a-f]"), "invalid image SHA-256")
+  return {image_sha256 ← image, region_id ← name(value.region_id),
+          region_revision ← name(value.region_revision)}
+end
+local same_target ← λ(left, right)
+  return left.image_sha256 = right.image_sha256 and left.region_id = right.region_id and
+         left.region_revision = right.region_revision
+end
+
+-- Compile is a structural snapshot, not SVM training or numerical qualification.
+-- Native role/basis/dimension validation still occurs at each executed pairing.
+decisions.compile ← λ(specification)
+  fields(specification, {id ← true, revision ← true, category ← true, root ← true})
+  local model ← {id ← name(specification.id), revision ← name(specification.revision),
+                 category ← name(specification.category)}
+  local seen ← {}
+  local ids ← {}
+  local count ← 0
+  local copy
+  copy ← λ(node, depth)
+    record(node)
+    assert(depth ≤ depth_limit and count < node_limit, "decision tree exceeds its bound")
+    assert(not seen[node], "cycle or shared node: expected a tree")
+    seen[node] ← true
+    count ← count + 1
+    local id ← name(node.id)
+    assert(not ids[id], "duplicate decision node identity")
+    ids[id] ← true
+    if node.kind = "leaf" then
+      fields(node, {id ← true, kind ← true, included ← true})
+      assert(type(node.included) = "boolean", "leaf needs an explicit Boolean decision")
+      return {id ← id, kind ← "leaf", included ← node.included}
+    elseif node.kind = "unknown" then
+      fields(node, {id ← true, kind ← true, reason ← true})
+      return {id ← id, kind ← "unknown", reason ← name(node.reason)}
+    end
+    fields(node, {id ← true, kind ← true, covector ← true, threshold ← true,
+                  yes ← true, no ← true})
+    assert(node.kind = "plane", "unsupported decision node")
+    assert(type(node.covector) = "userdata", "plane needs a native coordinate handle")
+    return {id ← id, kind ← "plane", covector ← node.covector,
+            threshold ← finite(node.threshold),
+            yes ← copy(node.yes, depth + 1), no ← copy(node.no, depth + 1)}
+  end
+  model.root ← copy(specification.root, 1)
+  local handle ← {}
+  plans[handle] ← model
+  return handle
+end
+
+-- The caller binds an immutable image revision and a region/mask revision.
+-- This adapter does not compute a digest, verify pixels or persist assertions.
+decisions.propose ← λ(entry, category, plan, assertion)
+  fields(entry, {target ← true, feature ← true, feature_revision ← true})
+  local selected ← target(entry.target)
+  category ← name(category)
+  local result ← {target ← selected, category ← category}
+  if assertion ~= nil then
+    fields(assertion, {kind ← true, target ← true, category ← true,
+                       event ← true, included ← true})
+    assert(assertion.kind = "human-assertion", "not an explicit human assertion")
+    assert(same_target(selected, target(assertion.target)), "stale or unrelated assertion target")
+    assert(name(assertion.category) = category, "assertion belongs to another category")
+    assert(type(assertion.included) = "boolean", "assertion needs an explicit Boolean")
+    result.kind ← "human-assertion"
+    result.event ← name(assertion.event)
+    result.included ← assertion.included
+    return result
+  end
+  if plan = nil then
+    result.kind ← "unknown"; result.reason ← "missing-model"
+    return result
+  end
+  local model ← assert(plans[plan], "not a compiled decision plan")
+  assert(model.category = category, "model belongs to another category")
+  result.model_id ← model.id; result.model_revision ← model.revision
+  result.mathematics_revision ← mathematics_revision
+  if entry.feature = nil then
+    result.kind ← "unknown"; result.reason ← "missing-feature"
+    return result
+  end
+  result.feature_revision ← name(entry.feature_revision)
+  assert(type(entry.feature) = "userdata", "feature needs a native coordinate handle")
+  local trace ← {}
+  local node ← model.root
+  while node.kind = "plane" do
+    -- Errors propagate: a failed shared operation never becomes a negative vote.
+    local score ← finite(project(entry.feature, node.covector))
+    local included ← score ≥ node.threshold
+    trace[#trace + 1] ← {node_id ← node.id, raw_score ← score,
+                          threshold ← node.threshold, side ← included and "yes" or "no"}
+    node ← included and node.yes or node.no
+  end
+  result.trace ← trace; result.leaf_id ← node.id
+  if node.kind = "unknown" then
+    result.kind ← "unknown"; result.reason ← node.reason
+  else
+    result.kind ← "proposal"; result.included ← node.included
+  end
+  return result
+end
+return decisions

@@ -1,0 +1,170 @@
+assert(_VERSION = "Lua 5.5")
+local decisions ← dofile(assert(arg[1]))
+local checks ← 0
+local check ← λ(condition, label)
+  assert(condition, label)
+  checks ← checks + 1
+end
+local refuse ← λ(action, label)
+  check(not pcall(action), label)
+end
+local descriptor ← λ(variance, basis)
+  return {representation ← "synthetic-oblique32/v1", space ← "decision-fixture-space",
+          basis ← basis or "fixture-basis", metric ← "standard-euclidean",
+          scalar ← "f32", variance ← variance}
+end
+local coordinates ← λ(variance, first, second, basis, dimension)
+  local values ← {}
+  for index ← 1, dimension or 32 do values[index] ← 0 end
+  values[1] ← first; values[2] ← second
+  return photo_native.coordinates(descriptor(variance, basis), values)
+end
+local sum_plane ← coordinates("covector", 1, 1)
+local difference_plane ← coordinates("covector", 1, -1)
+local leaf ← λ(id, included) return {id ← id, kind ← "leaf", included ← included} end
+local specification ← λ(category)
+  return {id ← "synthetic-oblique-tree", revision ← "fixture-1", category ← category,
+    root ← {id ← "sum", kind ← "plane", covector ← sum_plane, threshold ← 0,
+      yes ← {id ← "difference-positive", kind ← "plane", covector ← difference_plane,
+        threshold ← 0, yes ← leaf("both-positive", true), no ← leaf("mixed-positive", false)},
+      no ← {id ← "difference-negative", kind ← "plane", covector ← difference_plane,
+        threshold ← 0, yes ← leaf("mixed-negative", false), no ← leaf("both-negative", true)}}}
+end
+local selected ← λ()
+  return {image_sha256 ← string.rep("a", 64), region_id ← "synthetic-region",
+          region_revision ← "fixture-mask-v1"}
+end
+local entry ← λ(first, second)
+  return {target ← selected(), feature ← coordinates("vector", first, second),
+          feature_revision ← "synthetic-features-v1"}
+end
+local original ← specification("organic")
+local plan ← decisions.compile(original)
+local positive ← entry(2, 0)
+local first ← decisions.propose(positive, "organic", plan)
+check(first.kind = "proposal" and first.included, "positive oblique sector")
+check(first.trace[1].raw_score = 2 and first.trace[2].raw_score = 2, "shared scores")
+check(first.trace[1].side = "yes" and first.leaf_id = "both-positive", "ordered trace")
+check(first.model_revision = "fixture-1" and first.feature_revision = "synthetic-features-v1",
+      "model and feature provenance")
+check(first.mathematics_revision = photo_native.mathematics_revision, "shared source provenance")
+check(not decisions.propose(entry(0, 2), "organic", plan).included, "mixed positive sector")
+check(decisions.propose(entry(-2, 0), "organic", plan).included, "both negative sector")
+check(not decisions.propose(entry(0, -2), "organic", plan).included, "mixed negative sector")
+check(decisions.propose(entry(0, 0), "organic", plan).included, "equality takes yes branch")
+local offset ← specification("organic")
+offset.root.threshold ← 3
+check(not decisions.propose(positive, "organic", decisions.compile(offset)).included,
+      "nonzero affine boundary threshold")
+
+-- Caller-owned specifications, targets and returned traces cannot mutate a plan.
+original.root.threshold ← 100
+original.root.yes.yes.included ← false
+original.revision ← "caller-mutated"
+check(decisions.propose(positive, "organic", plan).included, "plan snapshot")
+check(decisions.propose(positive, "organic", plan).model_revision = "fixture-1", "revision snapshot")
+first.trace[1].raw_score ← 999
+check(decisions.propose(positive, "organic", plan).trace[1].raw_score = 2, "fresh trace")
+positive.target.region_revision ← "caller-mutated"
+check(first.target.region_revision = "fixture-mask-v1", "target snapshot")
+positive.target ← selected()
+collectgarbage("collect")
+check(decisions.propose(positive, "organic", plan).included, "plan retains native handles")
+
+local unknown ← decisions.propose(positive, "organic", nil)
+check(unknown.kind = "unknown" and unknown.included = nil, "missing model is not negative")
+local missing ← {target ← selected()}
+check(decisions.propose(missing, "organic", plan).reason = "missing-feature", "missing feature")
+local uncertain ← specification("organic")
+uncertain.root.yes.yes ← {id ← "abstain", kind ← "unknown", reason ← "insufficient-supervision"}
+local abstention ← decisions.propose(positive, "organic", decisions.compile(uncertain))
+check(abstention.kind = "unknown" and abstention.included = nil and #abstention.trace = 2,
+      "explicit unknown leaf retains route without inventing a label")
+local inorganic ← decisions.compile(specification("inorganic"))
+check(decisions.propose(positive, "organic", plan).included and
+      decisions.propose(positive, "inorganic", inorganic).included, "overlapping categories")
+
+local correction ← {kind ← "human-assertion", target ← selected(), category ← "organic",
+                     event ← "explicit-fixture-correction", included ← false}
+local accepted ← decisions.propose(missing, "organic", nil, correction)
+check(accepted.kind = "human-assertion" and accepted.included = false and
+      accepted.event = correction.event, "explicit correction does not need a model or features")
+check(decisions.propose(positive, "inorganic", inorganic).included, "category-local correction")
+correction.target.region_revision ← "old-mask"
+refuse(λ() decisions.propose(positive, "organic", plan, correction) end, "stale mask correction")
+correction.target ← selected(); correction.target.image_sha256 ← string.rep("b", 64)
+refuse(λ() decisions.propose(positive, "organic", plan, correction) end, "other photo correction")
+correction.target ← selected(); correction.category ← "inorganic"
+refuse(λ() decisions.propose(positive, "organic", plan, correction) end, "other category correction")
+correction.category ← "organic"; correction.event ← nil
+refuse(λ() decisions.propose(positive, "organic", plan, correction) end, "missing correction event")
+correction.event ← "fixture"; correction.kind ← "proposal"
+refuse(λ() decisions.propose(positive, "organic", plan, correction) end, "proposal is not assertion")
+
+refuse(λ() decisions.propose(positive, "organic", {}) end, "forged plan")
+refuse(λ() decisions.propose(positive, "inorganic", plan) end, "wrong model category")
+local invalid ← specification("organic"); invalid.root.threshold ← 0 ÷ 0
+refuse(λ() decisions.compile(invalid) end, "NaN threshold")
+invalid.root.threshold ← math.huge
+refuse(λ() decisions.compile(invalid) end, "infinite threshold")
+invalid ← specification("organic"); invalid.root.yes ← invalid.root
+refuse(λ() decisions.compile(invalid) end, "cycle")
+invalid ← specification("organic"); invalid.root.no ← invalid.root.yes
+refuse(λ() decisions.compile(invalid) end, "shared node refused by tree contract")
+invalid ← specification("organic"); invalid.root.no.id ← invalid.root.yes.id
+refuse(λ() decisions.compile(invalid) end, "duplicate identity")
+invalid ← specification("organic"); invalid.root.yes.yes.included ← nil
+refuse(λ() decisions.compile(invalid) end, "unlabelled leaf needs explicit unknown node")
+invalid ← specification("organic"); invalid.root.threshhold ← 0
+refuse(λ() decisions.compile(invalid) end, "misspelled field")
+invalid ← specification("organic"); invalid.root ← setmetatable(invalid.root, {})
+refuse(λ() decisions.compile(invalid) end, "metatable in model")
+invalid ← specification("organic"); invalid.root.covector ← {}
+refuse(λ() decisions.compile(invalid) end, "non-native coordinate handle")
+
+local build_chain ← λ(length)
+  local node ← leaf("end", true)
+  for index ← 1, length do
+    node ← {id ← "chain-" .. index, kind ← "plane", covector ← sum_plane,
+             threshold ← 0, yes ← node, no ← leaf("no-" .. index, false)}
+  end
+  local spec ← specification("organic"); spec.root ← node
+  return spec
+end
+check(decisions.propose(positive, "organic", decisions.compile(build_chain(31))).included,
+      "depth-32 boundary accepted")
+refuse(λ() decisions.compile(build_chain(32)) end, "depth bound")
+local number ← 0
+local full
+full ← λ(depth)
+  number ← number + 1
+  local id ← "full-" .. number
+  if depth = 0 then return leaf(id, true) end
+  return {id ← id, kind ← "plane", covector ← sum_plane, threshold ← 0,
+           yes ← full(depth - 1), no ← full(depth - 1)}
+end
+local bounded ← specification("organic"); bounded.root ← full(6)
+check(decisions.propose(positive, "organic", decisions.compile(bounded)).included,
+      "127-node boundary accepted")
+bounded.root ← full(7)
+refuse(λ() decisions.compile(bounded) end, "node bound")
+
+local invalid_entry ← entry(2, 0)
+invalid_entry.target.image_sha256 ← "not-a-content-digest"
+refuse(λ() decisions.propose(invalid_entry, "organic", plan) end, "invalid image identity")
+invalid_entry ← entry(2, 0); invalid_entry.feature_revision ← nil
+refuse(λ() decisions.propose(invalid_entry, "organic", plan) end, "missing feature provenance")
+invalid_entry ← entry(2, 0); invalid_entry.feature ← coordinates("covector", 2, 0)
+refuse(λ() decisions.propose(invalid_entry, "organic", plan) end, "native variance refusal")
+invalid_entry.feature ← coordinates("vector", 2, 0, "wrong-basis")
+refuse(λ() decisions.propose(invalid_entry, "organic", plan) end, "native basis refusal")
+invalid_entry.feature ← coordinates("vector", 2, 0, nil, 8)
+refuse(λ() decisions.propose(invalid_entry, "organic", plan) end, "8D rotation is not a 32D feature")
+local partial ← specification("organic")
+partial.root.yes.covector ← coordinates("covector", 1, -1, "wrong-basis")
+local partial_plan ← decisions.compile(partial)
+local retained ← decisions.propose(positive, "organic", plan)
+refuse(λ() decisions.propose(positive, "organic", partial_plan) end, "later pairing fails atomically")
+check(retained.included and retained.trace[2].raw_score = 2 and positive.feature_revision =
+      "synthetic-features-v1", "failure preserves old proposal and caller input")
+print("PASS oblique decision interface: " .. checks .. " checks; shared pairing; bounded routes; target-scoped assertions")
