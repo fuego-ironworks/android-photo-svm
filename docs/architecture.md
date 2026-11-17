@@ -1,100 +1,39 @@
-# Ownership and implemented boundary
+# Ownership and current implementation boundary
 
-The user requires functorial Icky C with modified iLua above shared rotation and
-hyperplane mathematics. This supersedes the initial independent C classifier.
+Functorial Icky C with modified iLua sits above shared rotation and hyperplane mathematics. The initial independent ordinary-C classifier is retained only under `reference/`; neither the production library nor the iLua executable links its arithmetic or training loops.
 
-## Current code
+## Current source
 
-- `src/photo_math.c`: named compositions of validation, shared-program
-  selection, bounded uniform transport, execution and signed Float32 readback.
-  It does not implement projection/rotation arithmetic or train an SVM.
-- `include/photo_math.h`: representation, named space, basis, metric, variance
-  and explicit Float32 coordinates. Rank equality alone is not composability.
-  Projection accepts a vector and matching covector; alignment requires two
-  vectors and the declared standard Euclidean metric. Invalid requests leave
-  caller outputs unchanged.
-- `host/ilua_main.c`: the narrow native binding and a host-only lifecycle adapter.
-  iLua coordinate handles own copied, bounded coordinates. Their contents are
-  not exposed for mutation. Lua's number type is transport; the selected native
-  representation is explicitly Float32. Other scalar profiles are refused.
-- `app/classify.ilua`: model/proposal/assertion distinctions and threshold policy.
-  Unknown is not inorganic. An explicit correction does not mutate a prior
-  proposal. This slice has no durable event store or training update rule.
-- `reference/`: the unchanged prior color/spatial partition, eight-feature
-  extractor and local fit/predict loops. Tests remain available, but neither
-  the library nor the iLua executable links this baseline. It is not a fallback.
+- `src/photo_math.c` owns validation, shared-program selection, bounded transport, execution, signed Float32 readback and resources. It does not implement projection, Householder/Givens arithmetic, an SVM trainer or a visual encoder.
+- `include/photo_math.h` names representation, space, basis, metric, dimension and vector/covector variance. Matching dimensions alone do not authorize composition. Outputs remain unchanged on failure.
+- `host/ilua_main.c` is a host-only lifecycle adapter and narrow binding. Coordinate userdata owns copied values. Exported component tables are copies. Lua's number representation is transport, not a second numerical implementation. The scripts are trusted; this is not a security sandbox.
+- `app/geometry.ilua` owns ordered composition/inversion of shared operations. `compose(first, second)` applies first then second; the inverse applies the inverse operations in reverse order.
+- `app/classify.ilua` owns model/proposal/assertion distinctions and thresholds. Unknown is not inorganic. Explicit corrections do not mutate old proposals. No durable event store or training update is implemented.
 
-Whole-photo classification does not require pixel segmentation. Feature-to-
-pixel mapping, an actual visual representation and photo evaluation remain
-photo-specific work; generic missing mathematical exports belong upstream.
+Whole-photo classification does not require segmentation. A visual representation, source-photo mapping, any region masks and human-labelled evaluation are still photo-specific work. Label meanings must come from the user's examples, not colour heuristics silently promoted to organic/inorganic truth.
 
-## Actual reused source
+## Reused mathematics
 
-The selected provider consumes these unchanged generated files from
-`fuego-ironworks/idris-shader-backend` at
-`bdf7e48d0161965269354b0aa26a2befe8e16885`:
+The draft depends on `fuego-ironworks/idris-shader-backend` PR #75, exact pin in `ci/dependencies.tsv`. The build invokes its registered checked shader compiler to produce a bounded operation bundle. Generated GLSL is not handwritten, copied into this repository or changed after emission. The candidate has moved away from the old retained `bdf7e48...` fragment snapshot; that historical boundary is preserved in this document's git history.
 
-- `generated/fullscreen.vert`, blob `a82ed3e72b842171a731d9c203f73a6989757c87`;
-- `generated/dot-vector32-covector32.frag`, blob
-  `5b891e5c67dcf49f9bf2d6b523208be0c30552d0`;
-- `generated/rotate-difference8-to-e1.frag`, blob
-  `49af343de226e7e1276a8b1d7110fc07d39698b3`.
+Three distinct operations are exposed:
 
-This is a retained experimental revision (PR #31 closed without merging), not
-an assertion that the feature is upstream main or a stable general library ABI.
-The build verifies exact dependency commits, clean tracked source and these
-blob identities, and records SHA-256 receipts. It does not rerun the Idriç
-shader generator. Shader code is not copied or reimplemented in this repo.
+1. Current upstream typed 32D vector/covector coordinate pairing, rendered into an unclamped signed Float32 framebuffer. A declared homogeneous coordinate can carry a bias; it is not inserted implicitly.
+2. The unchanged legacy 8D alignment diagnostic, explicitly named `inspect_alignment8`. Its thresholded algorithm remains a diagnostic, not the new reusable transformation.
+3. The new shared eight-dimensional two-reflection operation, returning all coordinates. Both nonzero normals are covectors in one standard Euclidean space. The result is an active SO(8) map in the same named basis. Reversing reflection order gives the inverse. Affine offsets, arbitrary metrics and implicit coordinate conversions are outside this operation.
 
-The 8D source constructs an orientation-preserving alignment with two
-reflections, but exports only diagnostics and uses an absolute 1e-6 threshold.
-The interface faithfully exposes **inspect_alignment8**, not `rotate`, a general
-matrix, or a proof of accuracy for degenerate/tiny/overflowing inputs. The 32D
-contraction preserves negative and above-one scores via an RGBA32F framebuffer.
-Nonfinite results and unavailable float capabilities are errors.
+The general mathematical lineage remains Idric's `_/examples/unified-higher-mathematics/EuclideanGeometry.idric`, including `compose_orthogonal`, `two_reflections` and `apply_orthogonal_exact`. The checked numerical shader module is a bounded lowering of that construction, not a claim that the exact semantic module is linked as a native float ABI. Givens and other planner/provider implementations keep their owners and are not claimed as linked here.
 
-The caller supplies a **dedicated current GLES3 context**. The library owns only
-its programs, framebuffer, texture and vertex array, not the context/display.
-Calls are synchronous on the owning current context; wrong-context operations
-and destruction are refused. The host adapter is not a replacement Android
-Activity or a parallel DEX runtime. Mobile adaptation remains in issue #2.
-GLES is an explicitly selected initial provider, not part of the mathematical
-meaning or a requirement that future providers use the same factorization.
+## Execution and ownership
 
-## Shared ownership still to connect
+The caller supplies a dedicated current GLES3 context and keeps context/display ownership. The library owns programs, framebuffer, texture and vertex array. All calls/destruction use the owning current context. Fixed-size readback resets pixel-pack state, checks all pages and publishes only a complete result. Missing kernels, invalid input, unsupported floating output and nonfinite results fail without local fallback. GLES is an explicit initial provider, not the definition of the mathematics.
 
-- `isomorphisms/Idric`,
-  `_/examples/unified-higher-mathematics/EuclideanGeometry.idric`, inspected blob
-  `aa1d8fc41f173eabce8be21b27f5f530237c9216`, supplies named spaces, exact-sample
-  transforms, `compose_orthogonal`, `two_reflections`, `apply_orthogonal_exact`.
-  It is not secretly reimplemented here or falsely claimed as a linked float ABI.
-- The separate retained `GivensRotate2ToE1.idr` and Coxeter/computer-science
-  alignment/planning work retain their owners. No Givens or general composition
-  execution claim is made by this slice.
-- `dilapidated-shed/icurses` PR #5 at
-  `e2c2df710955c99cb2ba3b9b0384a2b8b489e9dd` supplies the Icky/iLua ownership and
-  build precedent. Modified `isomorphisms/lua` is pinned at
-  `87306483cec50f8c750a22dda1d0742246fad756`; runtime admission beyond this
-  consumer's measured linkage is a separate obligation.
-- `isomorphisms/android-NDK` owns canonical DEX/JNI, lifecycle and packaging.
-  No Android implementation or physical C67 qualification is included here.
+The `dilapidated-shed/icurses` Icky/iLua boundary remains the precedent. Modified `isomorphisms/lua` is pinned at `87306483cec50f8c750a22dda1d0742246fad756`. Literal Icky source must be compiled by the owned ICK frontend; stock C/Lua is not a replacement. The inherited Clang reference job qualifies only preserved reference code.
+
+Canonical DEX/JNI, Android lifecycle and packaging belong to `isomorphisms/android-NDK`. This host adapter is not a second Android runtime. Issue #2 retains the mobile acceptance work.
 
 ## Acceptance and limits
 
-The workflow compiles **literal** Icky C through the pinned owned ICK frontend.
-It first tests signed projection, bias-as-declared-homogeneous-coordinate,
-alignment diagnostics, dimension/variance/basis/nonfinite/context refusals and
-resource cleanup. A deliberately sign-reversed shared shader must fail the
-actual score assertion; deleting a shared shader must prevent opening.
+The workflow must generate the checked shared operations, validate their GLSL, execute native signed-pairing/diagnostic/full-rotation tests, reject corrupted/missing programs and preserve output on a later-page failure. Only then may it build and execute modified iLua, the symbolic-syntax suite, noncommuting composition/inverse tests and policy-only changes with unchanged native hashes. Source/dependency/compiler/generated-program and link receipts are retained.
 
-Only after that C checkpoint does it build the actual modified Lua runtime,
-execute the upstream symbolic-syntax suite both standalone and embedded, and
-run policy/opaque-handle tests. Editing only the iLua threshold must change the
-proposal while hashes of the native executable/library stay unchanged. Link
-receipts exclude dynamic stock Lua and the old local classifier.
-
-These are synthetic-coordinate and hosted software-GLES tests, not training,
-encoder quality, image masks, Android API compatibility, driver portability,
-phone latency, memory pressure, or a release. Keep PR #1 draft. Future native
-lowering, proper arbitrary transformation exports, affine fitting and tree
-composition must retain upstream mathematical ownership and separate evidence.
+Test source is not an execution result. New qualification remains unverified until the exact-head workflow completes. These tests concern synthetic coordinates and hosted software GLES, not organic/inorganic accuracy, visual encoding, masks, Android API compatibility, hardware-driver portability, C67 latency/memory, signing or release readiness. PR #1 stays draft. See `docs/rotation-interface.md` for the bounded API contract and negative controls.

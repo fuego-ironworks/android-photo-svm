@@ -3,16 +3,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* This slice has a specific, explicitly selected GLES provider. The API names
- * operations, not a Householder implementation or a compulsory photo encoder.
- * A caller supplies a dedicated current GLES3 context and retains its ownership.
- * Calls and destruction must use that context. No implicit CPU fallback exists.
- */
+#define PHOTO_MATH_REVISION "d8781df201e66561d63dcf04bfb1af6d0684fc95"
+/* Explicit GLES provider, dedicated caller-owned current context, no CPU fallback. */
 typedef struct photo_math photo_math;
 typedef enum { PHOTO_OK, PHOTO_ARGUMENT, PHOTO_SPACE, PHOTO_CAPABILITY,
                PHOTO_CONTEXT, PHOTO_BACKEND } photo_status;
 typedef enum { PHOTO_VECTOR, PHOTO_COVECTOR } photo_variance;
-
 typedef struct {
     char representation[64];
     char space[64];
@@ -20,26 +16,25 @@ typedef struct {
     char metric[64];
     uint32_t dimension;
     photo_variance variance;
-    float values[32]; /* Explicit Float32 carrier, not an unlabelled embedding. */
+    float values[32];
 } photo_coordinates;
+typedef struct { float axis_ratio; float residual; } photo_alignment_report;
 
-typedef struct {
-    float axis_ratio;
-    float residual;
-} photo_alignment_report;
-
-/* Files are read from a caller-selected, revision-verified shared checkout.
- * Missing/invalid programs or unavailable float output are errors, not labels.
- */
+/* Read generated programs from a provenance-verified shared operation bundle. */
 photo_math *photo_math_open(const char *shared_root, char *error, size_t capacity);
 photo_status photo_math_close(photo_math **engine);
-photo_status photo_project32(photo_math *engine,
-                            const photo_coordinates *vector,
+photo_status photo_project32(photo_math *engine, const photo_coordinates *vector,
                             const photo_coordinates *covector, float *score);
-/* Existing shared shader returns diagnostics, NOT the full rotation or matrix. */
-photo_status photo_inspect_alignment8(photo_math *engine,
-                                    const photo_coordinates *left,
-                                    const photo_coordinates *right,
-                                    photo_alignment_report *report);
+photo_status photo_inspect_alignment8(photo_math *engine, const photo_coordinates *left,
+                                     const photo_coordinates *right, photo_alignment_report *report);
+/* Active SO(8) map H_second o H_first, in the SAME named Euclidean basis.
+ * Both normals are nonzero covectors; argument is a vector or covector.
+ * inverse is exactly 0 or 1. Covectors transform by R because R is orthogonal.
+ * Offset-free linear reflecting planes only. Output is untouched on every error;
+ * it may alias an input on success. The numerical operation lives upstream.
+ */
+photo_status photo_rotate8(photo_math *engine, const photo_coordinates *first_normal,
+                          const photo_coordinates *second_normal, const photo_coordinates *argument,
+                          int inverse, photo_coordinates *output);
 const char *photo_status_text(photo_status status);
 #endif
