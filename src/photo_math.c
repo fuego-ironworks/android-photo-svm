@@ -42,6 +42,9 @@ static GLuint compile_shared_stage(const char *root, const char *name,
     char *source ← read_shared_source(root, name);
     if (!source) { describe(error, capacity, "shared shader missing or oversized"); return 0; }
     GLuint shader ← glCreateShader(kind);
+    if (!shader) {
+        free(source); describe(error, capacity, "shared shader allocation failed"); return 0;
+    }
     const char *borrowed ← source;
     glShaderSource(shader, 1, &borrowed, NULL);
     glCompileShader(shader);
@@ -49,9 +52,9 @@ static GLuint compile_shared_stage(const char *root, const char *name,
     GLint compiled ← 0;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
     if (!compiled) {
-        char log[1024];
+        char log[1024] ← {0};
         glGetShaderInfoLog(shader, (GLsizei)sizeof(log), NULL, log);
-        describe(error, capacity, log);
+        describe(error, capacity, log[0] ? log : "shared shader compilation failed");
         glDeleteShader(shader);
         return 0;
     }
@@ -64,6 +67,10 @@ static GLuint link_shared_operation(const char *root, const char *name,
     GLuint fragment ← compile_shared_stage(root, name, GL_FRAGMENT_SHADER, error, capacity);
     if (!fragment) return 0;
     GLuint program ← glCreateProgram();
+    if (!program) {
+        glDeleteShader(fragment);
+        describe(error, capacity, "shared program allocation failed"); return 0;
+    }
     glAttachShader(program, vertex);
     glAttachShader(program, fragment);
     glLinkProgram(program);
@@ -71,9 +78,9 @@ static GLuint link_shared_operation(const char *root, const char *name,
     GLint linked ← 0;
     glGetProgramiv(program, GL_LINK_STATUS, &linked);
     if (!linked) {
-        char log[1024];
+        char log[1024] ← {0};
         glGetProgramInfoLog(program, (GLsizei)sizeof(log), NULL, log);
-        describe(error, capacity, log);
+        describe(error, capacity, log[0] ? log : "shared program link failed");
         glDeleteProgram(program);
         return 0;
     }
@@ -102,9 +109,10 @@ photo_math *photo_math_open(const char *root, char *error, size_t capacity)
         describe(error, capacity, "a shared checkout and dedicated current GLES3 context are required");
         return NULL;
     }
-    GLint range[2], precision;
+    GLint range[2] ← {0, 0};
+    GLint precision ← 0;
     glGetShaderPrecisionFormat(GL_FRAGMENT_SHADER, GL_HIGH_FLOAT, range, &precision);
-    if (precision < 23 || range[1] < 127) {
+    if (glGetError() != GL_NO_ERROR || precision < 23 || range[1] < 127) {
         describe(error, capacity, "Float32 shader precision is unavailable"); return NULL;
     }
     photo_math *engine ← calloc(1, sizeof(*engine));

@@ -39,13 +39,16 @@ static int bind_coordinates(lua_State *state)
     read_name(state, "basis", coordinates->basis);
     read_name(state, "metric", coordinates->metric);
     lua_getfield(state, 1, "scalar");
-    if (strcmp(luaL_checkstring(state, -1), "f32"))
+    size_t scalar_length ← 0;
+    const char *scalar ← luaL_checklstring(state, -1, &scalar_length);
+    if (scalar_length != 3 || memcmp(scalar, "f32", 3))
         return luaL_error(state, "only the declared f32 carrier is available");
     lua_pop(state, 1);
     lua_getfield(state, 1, "variance");
-    const char *variance ← luaL_checkstring(state, -1);
-    if (!strcmp(variance, "vector")) coordinates->variance ← PHOTO_VECTOR;
-    else if (!strcmp(variance, "covector")) coordinates->variance ← PHOTO_COVECTOR;
+    size_t variance_length ← 0;
+    const char *variance ← luaL_checklstring(state, -1, &variance_length);
+    if (variance_length == 6 && !memcmp(variance, "vector", 6)) coordinates->variance ← PHOTO_VECTOR;
+    else if (variance_length == 8 && !memcmp(variance, "covector", 8)) coordinates->variance ← PHOTO_COVECTOR;
     else return luaL_error(state, "variance must be vector or covector");
     lua_pop(state, 1);
     coordinates->dimension ← (uint32_t)dimension;
@@ -129,7 +132,10 @@ int main(int argc, char **argv)
     lua_setglobal(state, "arg");
     int status ← luaL_loadfile(state, argv[2]);
     if (status == LUA_OK) status ← lua_pcall(state, 0, 0, 0);
-    if (status != LUA_OK) fprintf(stderr, "%s\n", lua_tostring(state, -1));
+    if (status != LUA_OK) {
+        const char *message ← lua_tostring(state, -1);
+        fprintf(stderr, "%s\n", message ? message : "iLua raised a non-text error");
+    }
     lua_close(state);
     photo_math_close(&engine);
     host_context_close(&host);
