@@ -1,18 +1,62 @@
-name: Host C-ABI smoke and sanitizers
+name: ICK iLua shared-mathematics acceptance
 on:
   pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  host:
+  shared-mathematics:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      EGL_PLATFORM: surfaceless
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: isomorphisms/ai-ci/ick-host@618223d47315a180851c1539197cdcdb761a4b0d
+        id: ick
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: isomorphisms/lua
+          ref: 87306483cec50f8c750a22dda1d0742246fad756
+          path: .lua-source
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: fuego-ironworks/idris-shader-backend
+          ref: bdf7e48d0161965269354b0aa26a2befe8e16885
+          path: .shader-source
+          persist-credentials: false
+      - name: Install hosted GLES execution dependencies
+        run: sudo apt-get update && sudo apt-get install -y libegl-dev libgles-dev libgl1-mesa-dri
+      - name: Qualify literal Icky C and execute shared mathematics before iLua
+        run: make test-c mutants ICK="${{ steps.ick.outputs.compiler }}"
+      - name: Execute actual modified iLua and policy-only changes
+        run: make test-application ICK="${{ steps.ick.outputs.compiler }}" > out/host/application.log 2>&1 || { cat out/host/application.log; exit 1; }
+      - name: Show application acceptance
+        run: cat out/host/application.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: photo-shared-host-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            out/host/*.log
+            out/host/*.sha256
+            out/host/*.txt
+            out/host/*.tsv
+            out/host/*.map
+          if-no-files-found: error
+  reference-only:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Checkout exact source
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Compile and execute under Clang (no release artifact)
-        run: make CC=clang test demo-test
-      - name: Address/undefined behavior sanitizers
-        run: make CC=clang sanitize
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Preserve historical reference fixtures, not production acceptance
+        working-directory: reference
+        run: make CC=clang test demo-test sanitize

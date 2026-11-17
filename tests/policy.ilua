@@ -1,0 +1,48 @@
+assert(_VERSION = "Lua 5.5")
+local policy ← dofile(assert(arg[1]))
+local expected ← assert(arg[2])
+local descriptor ← λ(variance, basis)
+  return { representation ← "synthetic-homogeneous31/v1",
+           space ← "photo-fixture-space", basis ← basis,
+           metric ← "standard-euclidean", scalar ← "f32", variance ← variance }
+end
+local values ← {}
+local weights ← {}
+for index ← 1, 32 do values[index] ← 0; weights[index] ← 0 end
+values[1] ← 2; values[32] ← 1
+weights[1] ← 6; weights[32] ← 2
+local feature ← photo_native.coordinates(descriptor("vector", "fixture-basis"), values)
+local covector ← photo_native.coordinates(descriptor("covector", "fixture-basis"), weights)
+local model ← { id ← "synthetic-plane", revision ← "fixture-1", covector ← covector }
+local proposal ← policy.propose(feature, model, nil)
+assert(proposal.kind = "proposal" and proposal.raw_score = 14)
+assert(proposal.included = (expected = "included"))
+assert(policy.propose(feature, nil, nil).kind = "unknown")
+local corrected ← policy.propose(feature, model, { included ← false, event ← "explicit-test-correction" })
+assert(corrected.kind = "human-assertion" and not corrected.included)
+assert(corrected.event = "explicit-test-correction")
+assert(proposal.kind = "proposal") -- An assertion did not mutate the old proposal.
+weights[1] ← -3
+local changed_model ← { id ← "synthetic-plane", revision ← "fixture-2",
+  covector ← photo_native.coordinates(descriptor("covector", "fixture-basis"), weights) }
+assert(policy.propose(feature, changed_model, nil).raw_score = -4)
+local wrong_basis ← photo_native.coordinates(descriptor("covector", "unrelated-basis"), weights)
+assert(not pcall(photo_native.project32, feature, wrong_basis))
+local wrong_variance ← photo_native.coordinates(descriptor("vector", "fixture-basis"), weights)
+assert(not pcall(photo_native.project32, feature, wrong_variance))
+weights[1] ← 0 ÷ 0
+assert(not pcall(photo_native.coordinates, descriptor("covector", "fixture-basis"), weights))
+weights[1] ← 0
+local wrong_scalar ← descriptor("covector", "fixture-basis")
+wrong_scalar.scalar ← "f16"
+assert(not pcall(photo_native.coordinates, wrong_scalar, weights))
+local small ← {3, 4, 0, 0, 0, 0, 0, 0}
+local zero ← {0, 0, 0, 0, 0, 0, 0, 0}
+local first ← photo_native.coordinates(descriptor("vector", "fixture-basis"), small)
+local second ← photo_native.coordinates(descriptor("vector", "fixture-basis"), zero)
+local report ← photo_native.inspect_alignment8(first, second)
+assert(math.abs(report.axis_ratio − 1) < 0.0001 and report.residual < 0.0001)
+assert(not pcall(photo_native.project32, first, second))
+collectgarbage("collect")
+assert(photo_native.project32(feature, covector) = 14)
+print("PASS modified iLua policy: " .. expected .. "; actual shared mathematics; authoritative assertion; unknown; typed refusals")

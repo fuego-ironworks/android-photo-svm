@@ -1,0 +1,21 @@
+-- Application policy, not a numerical or training implementation.
+-- A caller supplies named features and a fitted/explicit model with provenance.
+-- An affine plane may use a declared homogeneous coordinate representation.
+local policy ← {}
+policy.threshold ← 0
+policy.propose ← λ(feature, model, assertion)
+  if assertion ~= nil then
+    assert(type(assertion.included) = "boolean")
+    return { kind ← "human-assertion", included ← assertion.included,
+             event ← assertion.event }
+  end
+  if model = nil then return { kind ← "unknown" } end
+  assert(type(model.id) = "string" and #model.id > 0)
+  assert(type(model.revision) = "string" and #model.revision > 0)
+  local score ← photo_native.project32(feature, model.covector)
+  return { kind ← "proposal", included ← score ≥ policy.threshold,
+           raw_score ← score, model_id ← model.id,
+           model_revision ← model.revision,
+           mathematics_revision ← photo_native.mathematics_revision }
+end
+return policy
