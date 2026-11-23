@@ -9,13 +9,17 @@
 #define PHOTO_SIDE_LIMIT 4096u
 #define PHOTO_TILE_SIDE 16u
 #define PHOTO_MAX_COMPONENTS 4096u
+#define PHOTO_REGION_FEATURE_DIMENSION 32u
+#define PHOTO_REGION_FEATURE_REVISION "rgba-histogram-v1"
+#define PHOTO_REGION_REVISION "photo-regions-v1"
 
 enum photo_region_status {
   PHOTO_REGION_OK = 0,
   PHOTO_REGION_ARGUMENT = 2,
   PHOTO_REGION_TOO_LARGE = 3,
   PHOTO_REGION_MEMORY = 4,
-  PHOTO_REGION_CANCELLED = 5
+  PHOTO_REGION_CANCELLED = 5,
+  PHOTO_REGION_NO_VISIBLE_PIXELS = 6
 };
 enum photo_region_assertion {
   PHOTO_REGION_UNKNOWN = 0,
@@ -46,6 +50,9 @@ int photo_region_at(const photo_region_frame *frame, uint32_t x, uint32_t y);
 /* A human label. This is not a model prediction or negative training datum. */
 int photo_region_assert(photo_region_frame *frame, uint32_t id, unsigned label);
 int photo_region_label(const photo_region_frame *frame, uint32_t id);
+/* Oriented-source RGBA histograms. All calls leave output unchanged on error. */
+int photo_region_features(const photo_region_frame *frame, uint32_t id,
+                          float output[PHOTO_REGION_FEATURE_DIMENSION]);
 /* Map a fitCenter ImageView touch; -1 is outside image letterbox. */
 int photo_region_touch(const photo_region_frame *frame, uint32_t view_width,
                        uint32_t view_height, int32_t touch_x, int32_t touch_y);

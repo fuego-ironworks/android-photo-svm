@@ -122,6 +122,34 @@ static void tiles_boundaries_and_human_assertion(void) {
   CHECK(photo_region_touch(f,320,320,-1,160)==-1);
   photo_region_close(&f);
 }
+static void region_feature_histograms(void) {
+  const uint32_t pixels[] = {0xffff0000u, 0x80ff0000u, 0x000000ffu, 0xff0000ffu};
+  photo_region_frame *frame = NULL;
+  CHECK(photo_region_open(pixels, 4, 4, 1, 4, 1, &frame) == PHOTO_REGION_OK);
+  float result[PHOTO_REGION_FEATURE_DIMENSION];
+  CHECK(photo_region_features(frame, 0, result) == PHOTO_REGION_OK);
+  CHECK(result[7] > 0.59f && result[7] < 0.61f);
+  CHECK(result[23] > 0.39f && result[23] < 0.41f);
+  CHECK(result[8] == 1.0f && result[25] == 1.0f);
+  CHECK(result[28] == 0.25f && result[29] == 0.0f);
+  CHECK(result[30] == 0.25f && result[31] == 0.5f);
+  CHECK(photo_region_assert(frame, 0, PHOTO_REGION_HUMAN_INORGANIC) == PHOTO_REGION_OK);
+  float before[PHOTO_REGION_FEATURE_DIMENSION];
+  memcpy(before, result, sizeof(before));
+  CHECK(photo_region_features(frame, 0, result) == PHOTO_REGION_OK);
+  CHECK(memcmp(before, result, sizeof(before)) == 0);
+  CHECK(photo_region_features(frame, 1, result) == PHOTO_REGION_ARGUMENT);
+  CHECK(memcmp(before, result, sizeof(before)) == 0);
+  CHECK(photo_region_cancel(frame) == PHOTO_REGION_OK);
+  CHECK(photo_region_features(frame, 0, result) == PHOTO_REGION_CANCELLED);
+  CHECK(memcmp(before, result, sizeof(before)) == 0);
+  photo_region_close(&frame);
+
+  CHECK(photo_region_open(pixels + 2, 1, 1, 1, 1, 1, &frame) == PHOTO_REGION_OK);
+  CHECK(photo_region_features(frame, 0, result) == PHOTO_REGION_NO_VISIBLE_PIXELS);
+  CHECK(memcmp(before, result, sizeof(before)) == 0);
+  photo_region_close(&frame);
+}
 static void large_boundaries_and_repeatability(void) {
   const unsigned w=1024,h=1024;
   uint32_t *image=malloc((size_t)w*h*sizeof(*image));
@@ -144,6 +172,7 @@ int main(void) {
   bounds_and_atomic_output();
   stride_and_orientation();
   tiles_boundaries_and_human_assertion();
+  region_feature_histograms();
   large_boundaries_and_repeatability();
   puts("PASS photo regions: input limits, stride, EXIF transforms 1..8, deterministic tiles, unknown vs human assertions, cancellation, overlay, fitCenter touch");
   return 0;

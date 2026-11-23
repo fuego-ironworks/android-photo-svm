@@ -6,10 +6,12 @@ SHADER_BUNDLE ?= $(SHADER_SOURCE)/build/photo-math
 OUT := out/host
 ICK_FLAGS := -fno-link-libatomic
 CFLAGS := -std=c17 -O2 -g -Wall -Wextra -Werror
-CPPFLAGS := -Iinclude -Isupport
+CPPFLAGS := -Iinclude -Isupport -Iandroid/native
 LDLIBS := -lEGL -lGLESv2 -lm -ldl
 LUA_REVISION := 87306483cec50f8c750a22dda1d0742246fad756
 SHADER_REVISION := d8781df201e66561d63dcf04bfb1af6d0684fc95
+REGION_SOURCES := android/native/photo_regions.c android/native/cgw_sha256.c
+REGION_HEADERS := android/native/photo_regions.h android/native/cgw_sha256.h
 
 .PHONY: preflight test test-c test-application mutants clean
 preflight:
@@ -54,8 +56,8 @@ $(OUT)/lua/liblua.a: | preflight
 	cp "$(LUA_SOURCE)/"*.[ch] $(OUT)/lua/
 	cp "$(LUA_SOURCE)/makefile" $(OUT)/lua/makefile
 	$(MAKE) -C $(OUT)/lua -f "$(abspath $(LUA_SOURCE))/makefile" CC="$(ICK) $(ICK_FLAGS)" MYCFLAGS="-std=c99 -DLUA_USE_POSIX" MYLDFLAGS= MYLIBS=-ldl liblua.a lua
-$(OUT)/photo_ilua: host/ilua_main.c support/host_context.h $(OUT)/libphoto_math.a $(OUT)/lua/liblua.a
-	"$(ICK)" $(ICK_FLAGS) $(CPPFLAGS) -I"$(LUA_SOURCE)" $(CFLAGS) $< $(OUT)/libphoto_math.a $(OUT)/lua/liblua.a -Wl,-Map,$@.map $(LDLIBS) -o $@
+$(OUT)/photo_ilua: host/ilua_main.c support/host_context.h $(REGION_SOURCES) $(REGION_HEADERS) $(OUT)/libphoto_math.a $(OUT)/lua/liblua.a
+	"$(ICK)" $(ICK_FLAGS) $(CPPFLAGS) -I"$(LUA_SOURCE)" $(CFLAGS) $< $(REGION_SOURCES) $(OUT)/libphoto_math.a $(OUT)/lua/liblua.a -Wl,-Map,$@.map $(LDLIBS) -o $@
 
 test-application: $(OUT)/photo_ilua
 	sha256sum -c $(OUT)/c-checkpoint.sha256
@@ -64,6 +66,7 @@ test-application: $(OUT)/photo_ilua
 	$(OUT)/photo_ilua "$(SHADER_BUNDLE)" "$(LUA_SOURCE)/testes/symbolic-assignment.lua"
 	$(OUT)/photo_ilua "$(SHADER_BUNDLE)" tests/rotations.ilua app/geometry.ilua
 	$(OUT)/photo_ilua "$(SHADER_BUNDLE)" tests/decisions.ilua app/decisions.ilua
+	$(OUT)/photo_ilua "$(SHADER_BUNDLE)" tests/region-features.ilua app/decisions.ilua
 	$(OUT)/photo_ilua "$(SHADER_BUNDLE)" tests/policy.ilua app/classify.ilua included
 	sha256sum $(OUT)/photo_ilua $(OUT)/libphoto_math.a > $(OUT)/before-policy-edit.sha256
 	sed 's/policy.threshold ← 0/policy.threshold ← 15/' app/classify.ilua > $(OUT)/alternate.ilua
