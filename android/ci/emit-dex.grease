@@ -1,0 +1,65 @@
+#!/usr/bin/env grease
+set -eu -o pipefail
+# Direct checked source -> DEX only. Nothing is pushed or merged.
+if (len(ARGV) !== 7) {
+  echo 'usage: grease emit-dex.grease PHOTO_REPOSITORY IDRIC_FRONTEND DEX_BACKEND DRIVER BAKSMALI SMALI FRESH_OUTPUT' >&2
+  exit 2
+}
+var repository = ARGV[0]
+var frontend = ARGV[1]
+var backend = ARGV[2]
+var driver = ARGV[3]
+var baksmali = ARGV[4]
+var smali = ARGV[5]
+var output = ARGV[6]
+for path in (ARGV) { if (path[0] !== '/') { echo 'FAIL absolute paths required' >&2; exit 2 } }
+test $(git -C "$frontend" rev-parse HEAD) = 740bbf2b1d9e811fd00c719c3473eede17ceea3b
+test $(git -C "$backend" rev-parse HEAD) = dfcf2cb22c0ebcc4ce999189cc2f066593bf3689
+test -x "$driver"
+test $(readlink -f "$driver") = $(readlink -f "$backend/dex/idric/build/exec/idric-dex_app/idric-dex.so")
+printf '%s  %s\n' 37ae4a41a8886e15c20b8362fa4250f96bbdb55e1a608199ad8b5dff068b588f "$baksmali" | sha256sum -c -
+printf '%s  %s\n' 32fa0e88a6c397b3922201adf5f3e534fbaed5a663c71d0c558c3ddce0af844a "$smali" | sha256sum -c -
+var scheme = "$frontend/_/.tools/chez-10.4.1/bin/scheme"
+test -x "$scheme"
+if test -e "$output" { echo 'FAIL refusing existing output' >&2; exit 1 }
+mkdir -p "$output"
+setglobal ENV.SCHEMEHEAPDIRS = "$frontend/_/.tools/chez-10.4.1/lib/csv10.4.1/ta6le"
+setglobal ENV.IDRIS2_PREFIX = "$frontend/_/bootstrap-build"
+setglobal ENV.IDRIS2_PACKAGE_PATH = "$frontend/_/bootstrap-build/idris2-0.8.0"
+setglobal ENV.IDRIS2_PATH = "$backend/dex/idric/build/ttc"
+setglobal ENV.LD_LIBRARY_PATH = "$frontend/_/build/exec/idris2_app"
+setglobal ENV.CHEZ = scheme
+sha256sum "$driver" "$baksmali" "$smali" \
+  "$repository/android/dex/PhotoActivity.idric" \
+  "$repository/android/dex/photo-jni.tsv" > "$output/inputs.sha256"
+if ! "$scheme" --program "$driver" --cg dex --directive managed-exports \
+  --directive 'generated-owner=Lorg/isomorphisms/photosvm/PhotoActivity;' \
+  --directive "jni-map=$repository/android/dex/photo-jni.tsv" \
+  --source-dir "$repository/android/dex" \
+  --build-dir "$output/build" --output-dir "$output" \
+  "$repository/android/dex/PhotoActivity.idric" -o candidate > "$output/compiler.txt" 2>&1 {
+  cat "$output/compiler.txt"
+  exit 1
+}
+cat "$output/compiler.txt"
+test -s "$output/candidate.dex"
+test -s "$output/candidate.checked.anf"
+java -jar "$baksmali" disassemble "$output/candidate.dex" -o "$output/decoded"
+var selected = "$output/decoded/org/isomorphisms/photosvm/PhotoActivity.smali"
+test -s "$selected"
+rg -x -F '.super Landroid/app/Activity;' "$selected"
+rg -F '.method public onActivityResult(IILandroid/content/Intent;)V' "$selected"
+rg -F '.method public static native ingest(IIII[I)J' "$selected"
+rg -F '.method public static native overlay(J[I)I' "$selected"
+rg -F '.method public static native imageKey(JI)J' "$selected"
+rg -F 'Landroid/media/ExifInterface;->getAttributeInt(Ljava/lang/String;I)I' "$selected"
+rg -F 'Landroid/content/SharedPreferences$Editor;->commit()Z' "$selected"
+rg -F 'Landroid/graphics/Bitmap;->getPixels([IIIIIII)V' "$selected"
+rg -F 'Landroid/graphics/BitmapRegionDecoder;->getWidth()I' "$selected"
+rg -F 'Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V' "$selected"
+try { rg -F 'LIdric/Generated' "$output/decoded" }
+if (_error.code !== 1) { echo 'FAIL default owner remains or search failed' >&2; exit 1 }
+java -jar "$smali" assemble "$output/decoded" -o "$output/roundtrip.dex"
+test -s "$output/roundtrip.dex"
+sha256sum "$output/candidate.dex" "$output/roundtrip.dex" > "$output/dex.sha256"
+printf 'source_to_DEX\tPASS\nindependent_decode_reassembly\tPASS\ninstalled_ART\tNOT_RUN\nphysical_C67\tNOT_RUN\n' > "$output/result.tsv"

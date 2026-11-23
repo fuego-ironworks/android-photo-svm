@@ -1,0 +1,8 @@
+source	revision	role
+photo_svm	d580e7ff4e81f75841f22c8fb62501dc3c1d1f6a	patch-base-candidate-not-qualified
+android_NDK	dfcf2cb22c0ebcc4ce999189cc2f066593bf3689	checked-DEX-JNI-backend-PR47
+Idric	740bbf2b1d9e811fd00c719c3473eede17ceea3b	checked-direct-DEX-front-end
+ICK	fbe86e23d55cfec2000c08e61deea2a407fd7175	host-and-three-Android-ABI-native-compilers
+shader_backend	d8781df201e66561d63dcf04bfb1af6d0684fc95	upstream-8D-32D-no-duplicate
+Explorer	379f3205f065c95d281539b05509972554a694d3	activity-pattern-and-APK-foundation
+ChatGPTExporter	d19dba2bd0a10fc8b59a94931caf26cc128b9335	reused-native-sha256

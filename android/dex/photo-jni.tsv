@@ -1,0 +1,12 @@
+library photosvm
+C:photo_ingest,libphotosvm ingest (IIII[I)J current-thread synchronous borrowed-local nonnull-inputs copy-input-arrays propagate-exceptions
+C:photo_overlay,libphotosvm overlay (J[I)I current-thread synchronous borrowed-local nonnull-output publish-output-on-success propagate-exceptions
+C:photo_release,libphotosvm release (J)I current-thread synchronous borrowed-local nonnull-strings propagate-exceptions
+C:photo_cancel,libphotosvm cancel (J)I current-thread synchronous borrowed-local nonnull-strings propagate-exceptions
+C:photo_width,libphotosvm displayWidth (J)I current-thread synchronous borrowed-local nonnull-strings propagate-exceptions
+C:photo_height,libphotosvm displayHeight (J)I current-thread synchronous borrowed-local nonnull-strings propagate-exceptions
+C:photo_count,libphotosvm regionCount (J)I current-thread synchronous borrowed-local nonnull-strings propagate-exceptions
+C:photo_at,libphotosvm regionAt (JII)I current-thread synchronous borrowed-local nonnull-strings propagate-exceptions
+C:photo_touch,libphotosvm regionAtView (JIIII)I current-thread synchronous borrowed-local nonnull-strings propagate-exceptions
+C:photo_assert,libphotosvm assertRegion (JII)I current-thread synchronous borrowed-local nonnull-strings propagate-exceptions
+C:photo_key,libphotosvm imageKey (JI)J current-thread synchronous borrowed-local nonnull-strings propagate-exceptions
