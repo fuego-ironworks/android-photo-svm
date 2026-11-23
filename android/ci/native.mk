@@ -45,7 +45,7 @@ native-preflight:
 	test -x "$$("$(ICK)" -print-prog-name=cc1)"
 	test -x "$(LINKER)" && test -x "$(NM)" && test -x "$(READELF)"
 	test -s "$(SYSROOT)/usr/include/jni.h"
-	rg -x 'Pkg.Revision[[:space:]]*=[[:space:]]*$(subst .,[.],$(NDK_REVISION))' "$(NDK)/source.properties"
+	grep -Ex 'Pkg[.]Revision[[:space:]]*=[[:space:]]*$(subst .,[.],$(NDK_REVISION))' "$(NDK)/source.properties"
 	test "$(OUT)" != "" && test "$(abspath $(OUT))" = "$(OUT)" && test ! -e "$(OUT)"
 	mkdir -p "$(OUT)/objects"
 
@@ -68,8 +68,8 @@ native-build: native-preflight $(NATIVE_OBJECTS)
 	test -s "$(OUT)/expected-jni.txt"
 	diff -u "$(OUT)/expected-jni.txt" "$(OUT)/observed-jni.txt"
 	"$(READELF)" -h -lW -d "$(OUT)/libphotosvm.so" > "$(OUT)/elf.txt"
-	rg -x ' *Machine: +$(MACHINE_$(ABI))' "$(OUT)/elf.txt"
-	rg -F '(SONAME)' "$(OUT)/elf.txt" | rg -F '[libphotosvm.so]'
+	grep -Ex ' *Machine: +$(MACHINE_$(ABI))' "$(OUT)/elf.txt"
+	grep -E '\(SONAME\).*\[libphotosvm[.]so\]' "$(OUT)/elf.txt"
 	awk '$$1=="LOAD" { n++; if ($$NF!="0x4000") bad=1 } END { exit !(n && !bad) }' "$(OUT)/elf.txt"
 	sha256sum $(NATIVE) native/*.h dex/photo-jni.tsv > "$(OUT)/source.sha256"
 	sha256sum "$(ICK)" "$$("$(ICK)" -print-prog-name=cc1)" > "$(OUT)/compiler.sha256"
