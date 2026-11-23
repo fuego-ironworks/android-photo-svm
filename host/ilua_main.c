@@ -1,5 +1,6 @@
 #include "photo_math.h"
 #include "host_context.h"
+#include "photo_regions.h"
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -12,6 +13,7 @@
 #error This consumer requires the pinned modified Lua 5.5 runtime
 #endif
 #define COORDINATES_TYPE "photo.named_coordinates.f32.v1"
+#define REGION_FRAME_TYPE "photo.oriented_rgba_region_frame.v1"
 
 static void read_name(lua_State *state, const char *field, char target[64])
 {
@@ -112,17 +114,110 @@ static int bind_components(lua_State *state)
     return 1; /* A copy: editing the table cannot mutate the coordinate handle. */
 }
 
+static int close_region_frame(lua_State *state)
+{
+    photo_region_frame **frame ← luaL_checkudata(state, 1, REGION_FRAME_TYPE);
+    photo_region_close(frame);
+    return 0;
+}
+
+static int bind_regions(lua_State *state)
+{
+    lua_Integer width ← luaL_checkinteger(state, 1);
+    lua_Integer height ← luaL_checkinteger(state, 2);
+    lua_Integer orientation ← luaL_checkinteger(state, 3);
+    if (width < 1 || height < 1 || width > PHOTO_SIDE_LIMIT || height > PHOTO_SIDE_LIMIT ||
+        width * height > PHOTO_PIXEL_LIMIT || orientation < 1 || orientation > 8)
+        return luaL_error(state, "invalid RGBA image dimensions or orientation");
+    size_t bytes ← 0;
+    luaL_checktype(state, 4, LUA_TSTRING);
+    const unsigned char *rgba ← (const unsigned char *)luaL_checklstring(state, 4, &bytes);
+    size_t count ← (size_t)(width * height);
+    if (bytes != 4u * count) return luaL_error(state, "invalid RGBA byte count");
+    photo_region_frame **frame ← lua_newuserdatauv(state, sizeof(*frame), 0);
+    *frame ← NULL;
+    luaL_setmetatable(state, REGION_FRAME_TYPE);
+    uint32_t *argb ← lua_newuserdatauv(state, count * sizeof(*argb), 0);
+    for (size_t index ← 0; index < count; ++index) {
+        const unsigned char *p ← rgba + 4u * index;
+        argb[index] ← (uint32_t)p[3] << 24 | (uint32_t)p[0] << 16 |
+                      (uint32_t)p[1] << 8 | p[2];
+    }
+    int status ← photo_region_open(argb, count, (uint32_t)width, (uint32_t)height,
+                                 (size_t)width, (unsigned)orientation, frame);
+    if (status != PHOTO_REGION_OK) return luaL_error(state, "region construction failed (%d)", status);
+    lua_pop(state, 1);
+    return 1;
+}
+
+static int bind_region_at(lua_State *state)
+{
+    photo_region_frame **frame ← luaL_checkudata(state, 1, REGION_FRAME_TYPE);
+    lua_Integer x ← luaL_checkinteger(state, 2);
+    lua_Integer y ← luaL_checkinteger(state, 3);
+    if (x < 0 || y < 0 || x >= photo_region_width(*frame) || y >= photo_region_height(*frame))
+        return luaL_error(state, "position is outside the oriented frame");
+    lua_pushinteger(state, photo_region_at(*frame, (uint32_t)x, (uint32_t)y));
+    return 1;
+}
+
+static int bind_region_entry(lua_State *state)
+{
+    photo_region_frame **frame ← luaL_checkudata(state, 1, REGION_FRAME_TYPE);
+    lua_Integer id ← luaL_checkinteger(state, 2);
+    if (id < 0 || id >= photo_region_count(*frame)) return luaL_error(state, "invalid region ID");
+    photo_coordinates feature ← {
+        .representation ← PHOTO_REGION_FEATURE_REVISION,
+        .space ← "photo-region-color",
+        .basis ← "rgba-histogram-rgb8-intensity4-alpha4",
+        .metric ← "standard-euclidean",
+        .dimension ← PHOTO_REGION_FEATURE_DIMENSION,
+        .variance ← PHOTO_VECTOR
+    };
+    int status ← photo_region_features(*frame, (uint32_t)id, feature.values);
+    if (status != PHOTO_REGION_OK && status != PHOTO_REGION_NO_VISIBLE_PIXELS)
+        return luaL_error(state, "region feature extraction failed (%d)", status);
+
+    char image_key[65];
+    for (unsigned word ← 0; word < 4; ++word)
+        snprintf(image_key + 16u * word, 17u, "%016llx",
+                 (unsigned long long)(uint64_t)photo_region_key_word(*frame, word));
+    lua_createtable(state, 0, 3);
+    lua_createtable(state, 0, 3);
+    lua_pushstring(state, image_key); lua_setfield(state, -2, "image_sha256");
+    lua_pushfstring(state, "%d", (int)id); lua_setfield(state, -2, "region_id");
+    lua_pushliteral(state, PHOTO_REGION_REVISION); lua_setfield(state, -2, "region_revision");
+    lua_setfield(state, -2, "target");
+    if (status == PHOTO_REGION_OK) {
+        photo_coordinates *coordinates ← lua_newuserdatauv(state, sizeof(*coordinates), 0);
+        *coordinates ← feature;
+        luaL_setmetatable(state, COORDINATES_TYPE);
+        lua_setfield(state, -2, "feature");
+        lua_pushliteral(state, PHOTO_REGION_FEATURE_REVISION);
+        lua_setfield(state, -2, "feature_revision");
+    }
+    return 1;
+}
+
 static void register_native_interface(lua_State *state, photo_math *engine)
 {
     luaL_newmetatable(state, COORDINATES_TYPE);
     lua_pushliteral(state, "immutable named Float32 coordinates"); lua_setfield(state, -2, "__metatable");
     lua_pop(state, 1);
-    lua_createtable(state, 0, 8);
+    luaL_newmetatable(state, REGION_FRAME_TYPE);
+    lua_pushliteral(state, "immutable oriented photo region frame");
+    lua_setfield(state, -2, "__metatable");
+    lua_pushcfunction(state, close_region_frame); lua_setfield(state, -2, "__gc");
+    lua_pop(state, 1);
+    lua_createtable(state, 0, 11);
     lua_pushcfunction(state, bind_coordinates); lua_setfield(state, -2, "coordinates");
     lua_pushcfunction(state, bind_components); lua_setfield(state, -2, "components");
     lua_pushlightuserdata(state, engine); lua_pushcclosure(state, bind_projection, 1); lua_setfield(state, -2, "project32");
     lua_pushlightuserdata(state, engine); lua_pushcclosure(state, bind_alignment_report, 1); lua_setfield(state, -2, "inspect_alignment8");
     lua_pushlightuserdata(state, engine); lua_pushcclosure(state, bind_rotation, 1); lua_setfield(state, -2, "rotate8");
+    lua_pushcfunction(state, bind_regions); lua_setfield(state, -2, "regions");
+    lua_pushcfunction(state, bind_region_at); lua_setfield(state, -2, "region_at");
+    lua_pushcfunction(state, bind_region_entry); lua_setfield(state, -2, "region_entry");
     lua_pushliteral(state, "shared-glsles-checked-v2"); lua_setfield(state, -2, "provider");
     lua_pushliteral(state, PHOTO_MATH_REVISION); lua_setfield(state, -2, "mathematics_revision");
     lua_pushliteral(state, "87306483cec50f8c750a22dda1d0742246fad756"); lua_setfield(state, -2, "runtime_revision");

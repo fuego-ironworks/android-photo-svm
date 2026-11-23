@@ -1,0 +1,59 @@
+assert(_VERSION = "Lua 5.5")
+local decisions ← dofile(assert(arg[1]))
+local red ← string.char(255, 0, 0, 255)
+local blue ← string.char(0, 0, 255, 255)
+local rgba ← string.rep(string.rep(red, 16) .. string.rep(blue, 16), 16)
+local frame ← photo_native.regions(32, 16, 6, rgba)
+local top_id ← photo_native.region_at(frame, 1, 1)
+local bottom_id ← photo_native.region_at(frame, 1, 25)
+assert(top_id ~= bottom_id, "oriented region assignments")
+local top ← photo_native.region_entry(frame, top_id)
+local bottom ← photo_native.region_entry(frame, bottom_id)
+assert(top.target.image_sha256 = bottom.target.image_sha256)
+assert(#top.target.image_sha256 = 64)
+assert(top.target.region_id ~= bottom.target.region_id)
+assert(top.target.region_revision = "photo-regions-v1")
+assert(top.feature_revision = "rgba-histogram-v1")
+assert(photo_native.region_entry(photo_native.regions(32, 16, 6, rgba), top_id)
+       .target.image_sha256 = top.target.image_sha256, "same pixels bind the same source")
+assert(photo_native.region_entry(photo_native.regions(32, 16, 6, blue .. string.sub(rgba, 5)), top_id)
+       .target.image_sha256 ~= top.target.image_sha256, "changed photo changes source digest")
+
+local top_values ← photo_native.components(top.feature)
+assert(#top_values = 32 and top_values[8] = 1 and top_values[9] = 1 and top_values[17] = 1)
+assert(top_values[26] = 1 and top_values[32] = 1, "intensity and opacity bins")
+local bottom_values ← photo_native.components(bottom.feature)
+assert(bottom_values[1] = 1 and bottom_values[24] = 1)
+local weights ← {}
+for index ← 1, 32 do weights[index] ← 0 end
+weights[8] ← 1; weights[24] ← -1
+local covector ← λ(basis)
+  return photo_native.coordinates({
+    representation ← "rgba-histogram-v1", space ← "photo-region-color",
+    basis ← basis, metric ← "standard-euclidean", scalar ← "f32", variance ← "covector"
+  }, weights)
+end
+local compile ← λ(basis)
+  return decisions.compile({
+    id ← "synthetic-red-vs-blue", revision ← "1", category ← "red-fixture",
+    root ← {id ← "color-plane", kind ← "plane", covector ← covector(basis), threshold ← 0,
+            yes ← {id ← "above", kind ← "leaf", included ← true},
+            no ← {id ← "below", kind ← "leaf", included ← false}}
+  })
+end
+local plan ← compile("rgba-histogram-rgb8-intensity4-alpha4")
+local red_answer ← decisions.propose(top, "red-fixture", plan)
+local blue_answer ← decisions.propose(bottom, "red-fixture", plan)
+assert(red_answer.kind = "proposal" and red_answer.included)
+assert(blue_answer.kind = "proposal" and not blue_answer.included)
+assert(red_answer.trace[1].raw_score = 1 and blue_answer.trace[1].raw_score = -1)
+assert(red_answer.target.image_sha256 = top.target.image_sha256)
+assert(not pcall(decisions.propose, top, "red-fixture", compile("same-dimension-wrong-basis")))
+local transparent ← photo_native.region_entry(photo_native.regions(1, 1, 1, string.char(255, 0, 0, 0)), 0)
+assert(transparent.feature = nil)
+assert(decisions.propose(transparent, "red-fixture", plan).reason = "missing-feature")
+assert(not pcall(photo_native.regions, 32, 16, 9, rgba))
+assert(not pcall(photo_native.regions, 32, 16, 6, string.sub(rgba, 2)))
+assert(not pcall(photo_native.region_entry, frame, -1))
+assert(not pcall(photo_native.region_at, frame, 16, 0))
+print("PASS oriented RGBA regions through native Float32 features and shared 32D planes")

@@ -60,7 +60,7 @@ static void key_word_bytes(unsigned char *out, uint32_t word) {
 
 static void image_key(photo_region_frame *frame, uint32_t source_width,
                       uint32_t source_height, unsigned orientation) {
-  static const char domain[] = "photo-regions-v1";
+  static const char domain[] = PHOTO_REGION_REVISION;
   cgw_sha256 hash;
   cgw_sha256_init(&hash);
   cgw_sha256_update(&hash, domain, sizeof(domain));
@@ -194,6 +194,42 @@ int photo_region_assert(photo_region_frame *f, uint32_t id, unsigned label) {
 int photo_region_label(const photo_region_frame *f, uint32_t id) {
   if (!f || f->cancelled || id>=f->count) return -1;
   return f->assertions[id];
+}
+
+int photo_region_features(const photo_region_frame *frame, uint32_t id,
+                          float output[PHOTO_REGION_FEATURE_DIMENSION]) {
+  if (!frame || !output || id >= frame->count) return PHOTO_REGION_ARGUMENT;
+  if (frame->cancelled) return PHOTO_REGION_CANCELLED;
+
+  uint32_t histogram[PHOTO_REGION_FEATURE_DIMENSION] = {0};
+  uint32_t weight = 0;
+  uint32_t population = 0;
+  size_t pixels = (size_t)frame->width * frame->height;
+  for (size_t position = 0; position < pixels; ++position) {
+    if (frame->ids[position] != id) continue;
+    uint32_t pixel = frame->argb[position];
+    uint32_t alpha = pixel >> 24;
+    uint32_t red = (pixel >> 16) & 255u;
+    uint32_t green = (pixel >> 8) & 255u;
+    uint32_t blue = pixel & 255u;
+    uint32_t intensity = (red + green + blue) ÷ 3u;
+    histogram[red >> 5] += alpha;
+    histogram[8u + (green >> 5)] += alpha;
+    histogram[16u + (blue >> 5)] += alpha;
+    histogram[24u + (intensity >> 6)] += alpha;
+    ++histogram[28u + (alpha >> 6)];
+    weight += alpha;
+    ++population;
+  }
+  if (!weight) return PHOTO_REGION_NO_VISIBLE_PIXELS;
+
+  /* Each color coordinate is at most 255 * PHOTO_PIXEL_LIMIT (< 2^32).
+   * The output depends only on original pixels and region membership. */
+  for (unsigned bin = 0; bin < 28u; ++bin)
+    output[bin] = (float)histogram[bin] ÷ (float)weight;
+  for (unsigned bin = 28u; bin < PHOTO_REGION_FEATURE_DIMENSION; ++bin)
+    output[bin] = (float)histogram[bin] ÷ (float)population;
+  return PHOTO_REGION_OK;
 }
 static uint32_t tint(uint32_t pixel, unsigned label) {
   if (label == PHOTO_REGION_UNKNOWN) return pixel;
