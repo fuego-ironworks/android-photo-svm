@@ -1,0 +1,627 @@
+module PhotoActivity
+
+-- Candidate checked Idriç -> DEX application source. The generated owner
+-- is selected by the backend's generated-owner directive, not by hand-editing
+-- classes.dex. No Java/Kotlin source is part of this application.
+import Data.IORef
+import Data.Text
+
+%default covering
+
+data Activity : Type where [external]
+data Bundle : Type where [external]
+data View : Type where [external]
+data ImageView : Type where [external]
+data TextView : Type where [external]
+data Intent : Type where [external]
+data Uri : Type where [external]
+data Resolver : Type where [external]
+data Stream : Type where [external]
+data PhotoFile : Type where [external]
+data FileInput : Type where [external]
+data FileOutput : Type where [external]
+data ByteBuffer : Type where [external]
+data StageBuffer : Type where [external]
+data ReadChannel : Type where [external]
+data WriteChannel : Type where [external]
+data PhotoMetadata : Type where [external]
+data Preferences : Type where [external]
+data Editor : Type where [external]
+data RegionDecoder : Type where [external]
+data Rectangle : Type where [external]
+data DecodeOptions : Type where [external]
+data Bitmap : Type where [external]
+data BitmapConfig : Type where [external]
+data IntBuffer : Type where [external]
+data PixelArray : Type where [external]
+data ResourceTable : Type where [external]
+data Object : Type where [external]
+data ClickListener : Type where [external]
+data TouchListener : Type where [external]
+data MotionEvent : Type where [external]
+data CoordinateFloat : Type where [external]
+data Throwable : Type where [external]
+
+record Controls where
+  constructor Bound
+  image : ImageView
+  status : TextView
+  pick_id : Int32
+  organic_id : Int32
+  inorganic_id : Int32
+
+record Frame where
+  constructor Accepted
+  handle : Int64
+  width : Int32
+  height : Int32
+  correction_store : Preferences
+  count : Int32
+  original_uri : Uri
+  selected : Maybe Int32
+
+record Live where
+  constructor Running
+  controls : Controls
+  current : Maybe Frame
+
+data Phase = Ready (IORef Live) | Closed
+
+%extern
+read_phase : Activity → PrimIO (IORef Phase)
+%extern
+write_phase : Activity → IORef Phase → PrimIO ()
+
+%foreign "dex:reference-is-null"
+is_null : Object → Int32
+%foreign "dex:cast:Landroid/content/Intent;:Ljava/lang/Object;"
+intent_object : Intent → Object
+%foreign "dex:cast:Landroid/os/Bundle;:Ljava/lang/Object;"
+bundle_object : Bundle → Object
+%foreign "dex:cast:Landroid/net/Uri;:Ljava/lang/Object;"
+uri_object : Uri → Object
+%foreign "dex:cast:Ljava/io/InputStream;:Ljava/lang/Object;"
+stream_object : Stream → Object
+%foreign "dex:cast:Landroid/graphics/BitmapRegionDecoder;:Ljava/lang/Object;"
+decoder_object : RegionDecoder → Object
+%foreign "dex:cast:Landroid/graphics/Bitmap;:Ljava/lang/Object;"
+bitmap_object : Bitmap → Object
+%foreign "dex:cast:Landroid/view/View;:Landroid/widget/ImageView;"
+as_image : View → ImageView
+%foreign "dex:cast:Landroid/view/View;:Landroid/widget/TextView;"
+as_text : View → TextView
+%foreign "dex:cast:Landroid/widget/ImageView;:Landroid/view/View;"
+image_view : ImageView → View
+%foreign "dex:cast:Landroid/app/Activity;:Landroid/view/View$OnClickListener;"
+click_listener : Activity → ClickListener
+%foreign "dex:cast:Landroid/app/Activity;:Landroid/view/View$OnTouchListener;"
+touch_listener : Activity → TouchListener
+
+%foreign "dex:virtual:Landroid/app/Activity;:getResources:()Landroid/content/res/Resources;"
+resources : Activity → PrimIO ResourceTable
+%foreign "dex:virtual:Landroid/app/Activity;:getPackageName:()Ljava/lang/String;"
+package_name : Activity → PrimIO Text
+%foreign "dex:virtual:Landroid/content/res/Resources;:getIdentifier:(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I"
+resource_id : ResourceTable → Text → Text → Text → PrimIO Int32
+%foreign "dex:virtual:Landroid/app/Activity;:setContentView:(I)V"
+set_layout : Activity → Int32 → PrimIO ()
+%foreign "dex:virtual:Landroid/app/Activity;:findViewById:(I)Landroid/view/View;"
+find_view : Activity → Int32 → PrimIO View
+%foreign "dex:virtual:Landroid/view/View;:getId:()I"
+view_id : View → PrimIO Int32
+%foreign "dex:virtual:Landroid/view/View;:getWidth:()I"
+view_width : View → PrimIO Int32
+%foreign "dex:virtual:Landroid/view/View;:getHeight:()I"
+view_height : View → PrimIO Int32
+%foreign "dex:virtual:Landroid/view/View;:setOnClickListener:(Landroid/view/View$OnClickListener;)V"
+on_click : View → ClickListener → PrimIO ()
+%foreign "dex:virtual:Landroid/view/View;:setOnTouchListener:(Landroid/view/View$OnTouchListener;)V"
+on_touch : View → TouchListener → PrimIO ()
+%foreign "dex:virtual:Landroid/view/View;:setClickable:(Z)V"
+set_clickable : View → Int32 → PrimIO ()
+%foreign "dex:virtual:Landroid/widget/TextView;:setText:(Ljava/lang/CharSequence;)V"
+set_status : TextView → Text → PrimIO ()
+%foreign "dex:virtual:Landroid/widget/ImageView;:setImageBitmap:(Landroid/graphics/Bitmap;)V"
+set_bitmap : ImageView → Bitmap → PrimIO ()
+
+%foreign "dex:construct:Landroid/content/Intent;:<init>:(Ljava/lang/String;)V"
+new_intent : Text → PrimIO Intent
+%foreign "dex:virtual:Landroid/content/Intent;:addCategory:(Ljava/lang/String;)Landroid/content/Intent;"
+add_category : Intent → Text → PrimIO Intent
+%foreign "dex:virtual:Landroid/content/Intent;:setType:(Ljava/lang/String;)Landroid/content/Intent;"
+set_type : Intent → Text → PrimIO Intent
+%foreign "dex:virtual:Landroid/app/Activity;:startActivityForResult:(Landroid/content/Intent;I)V"
+open_picker : Activity → Intent → Int32 → PrimIO ()
+%foreign "dex:virtual:Landroid/content/Intent;:getData:()Landroid/net/Uri;"
+picked_uri : Intent → PrimIO Uri
+%foreign "dex:static:Landroid/net/Uri;:parse:(Ljava/lang/String;)Landroid/net/Uri;"
+parse_uri : Text → PrimIO Uri
+%foreign "dex:virtual:Landroid/net/Uri;:toString:()Ljava/lang/String;"
+uri_text : Uri → PrimIO Text
+%foreign "dex:virtual:Landroid/os/Bundle;:getString:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;"
+read_saved_uri : Bundle → Text → Text → PrimIO Text
+%foreign "dex:virtual:Landroid/os/Bundle;:putString:(Ljava/lang/String;Ljava/lang/String;)V"
+write_saved_uri : Bundle → Text → Text → PrimIO ()
+%foreign "dex:virtual:Landroid/app/Activity;:getContentResolver:()Landroid/content/ContentResolver;"
+content_resolver : Activity → PrimIO Resolver
+%foreign "dex:virtual:Landroid/content/ContentResolver;:openInputStream:(Landroid/net/Uri;)Ljava/io/InputStream;"
+open_stream : Resolver → Uri → PrimIO Stream
+%foreign "dex:virtual:Ljava/io/InputStream;:close:()V"
+close_stream : Stream → PrimIO ()
+%foreign "dex:static:Ljava/nio/channels/Channels;:newChannel:(Ljava/io/InputStream;)Ljava/nio/channels/ReadableByteChannel;"
+staging_source : Stream → PrimIO ReadChannel
+%foreign "dex:virtual:Landroid/app/Activity;:getCacheDir:()Ljava/io/File;"
+cache_directory : Activity → PrimIO PhotoFile
+%foreign "dex:static:Ljava/io/File;:createTempFile:(Ljava/lang/String;Ljava/lang/String;Ljava/io/File;)Ljava/io/File;"
+new_staged_file : Text → Text → PhotoFile → PrimIO PhotoFile
+%foreign "dex:virtual:Ljava/io/File;:getAbsolutePath:()Ljava/lang/String;"
+file_path : PhotoFile → PrimIO Text
+%foreign "dex:virtual:Ljava/io/File;:delete:()Z"
+delete_file : PhotoFile → PrimIO Int32
+%foreign "dex:construct:Ljava/io/FileOutputStream;:<init>:(Ljava/io/File;)V"
+open_staging_output : PhotoFile → PrimIO FileOutput
+%foreign "dex:virtual:Ljava/io/FileOutputStream;:getChannel:()Ljava/nio/channels/FileChannel;"
+staging_sink : FileOutput → PrimIO WriteChannel
+%foreign "dex:virtual:Ljava/io/FileOutputStream;:close:()V"
+close_staging_output : FileOutput → PrimIO ()
+%foreign "dex:construct:Ljava/io/FileInputStream;:<init>:(Ljava/io/File;)V"
+open_staging_input : PhotoFile → PrimIO FileInput
+%foreign "dex:virtual:Ljava/io/FileInputStream;:read:()I"
+read_header_byte : FileInput → PrimIO Int32
+%foreign "dex:virtual:Ljava/io/FileInputStream;:close:()V"
+close_staging_input : FileInput → PrimIO ()
+%foreign "dex:static:Ljava/nio/ByteBuffer;:allocate:(I)Ljava/nio/ByteBuffer;"
+allocate_bytes : Int32 → PrimIO ByteBuffer
+%foreign "dex:cast:Ljava/nio/ByteBuffer;:Ljava/nio/Buffer;"
+base_buffer : ByteBuffer → StageBuffer
+%foreign "dex:virtual:Ljava/nio/Buffer;:clear:()Ljava/nio/Buffer;"
+clear_bytes : StageBuffer → PrimIO StageBuffer
+%foreign "dex:virtual:Ljava/nio/Buffer;:flip:()Ljava/nio/Buffer;"
+flip_bytes : StageBuffer → PrimIO StageBuffer
+%foreign "dex:interface:Ljava/nio/channels/ReadableByteChannel;:read:(Ljava/nio/ByteBuffer;)I"
+read_chunk : ReadChannel → ByteBuffer → PrimIO Int32
+%foreign "dex:virtual:Ljava/nio/channels/FileChannel;:write:(Ljava/nio/ByteBuffer;)I"
+write_chunk : WriteChannel → ByteBuffer → PrimIO Int32
+%foreign "dex:construct:Landroid/media/ExifInterface;:<init>:(Ljava/lang/String;)V"
+read_jpeg_metadata : Text → PrimIO PhotoMetadata
+%foreign "dex:virtual:Landroid/media/ExifInterface;:getAttributeInt:(Ljava/lang/String;I)I"
+metadata_tag : PhotoMetadata → Text → Int32 → PrimIO Int32
+%foreign "dex:static:Landroid/graphics/BitmapRegionDecoder;:newInstance:(Ljava/lang/String;Z)Landroid/graphics/BitmapRegionDecoder;"
+new_decoder : Text → Int32 → PrimIO RegionDecoder
+%foreign "dex:virtual:Landroid/graphics/BitmapRegionDecoder;:getWidth:()I"
+decode_width : RegionDecoder → PrimIO Int32
+%foreign "dex:virtual:Landroid/graphics/BitmapRegionDecoder;:getHeight:()I"
+decode_height : RegionDecoder → PrimIO Int32
+%foreign "dex:virtual:Landroid/graphics/BitmapRegionDecoder;:recycle:()V"
+recycle_decoder : RegionDecoder → PrimIO ()
+%foreign "dex:construct:Landroid/graphics/Rect;:<init>:(IIII)V"
+rectangle : Int32 → Int32 → Int32 → Int32 → PrimIO Rectangle
+%foreign "dex:construct:Landroid/graphics/BitmapFactory$Options;:<init>:()V"
+new_options : PrimIO DecodeOptions
+%foreign "dex:virtual:Landroid/graphics/BitmapRegionDecoder;:decodeRegion:(Landroid/graphics/Rect;Landroid/graphics/BitmapFactory$Options;)Landroid/graphics/Bitmap;"
+decode_region : RegionDecoder → Rectangle → DecodeOptions → PrimIO Bitmap
+%foreign "dex:virtual:Landroid/graphics/Bitmap;:recycle:()V"
+recycle_bitmap : Bitmap → PrimIO ()
+%foreign "dex:virtual:Landroid/graphics/Bitmap;:getPixels:([IIIIIII)V"
+get_pixels : Bitmap → PixelArray → Int32 → Int32 → Int32 → Int32 → Int32 → Int32 → PrimIO ()
+%foreign "dex:static:Ljava/nio/IntBuffer;:allocate:(I)Ljava/nio/IntBuffer;"
+allocate_pixels : Int32 → PrimIO IntBuffer
+%foreign "dex:virtual:Ljava/nio/IntBuffer;:array:()[I"
+backing_array : IntBuffer → PrimIO PixelArray
+%foreign "dex:static:Landroid/graphics/Bitmap$Config;:valueOf:(Ljava/lang/String;)Landroid/graphics/Bitmap$Config;"
+bitmap_format : Text → PrimIO BitmapConfig
+%foreign "dex:static:Landroid/graphics/Bitmap;:createBitmap:([IIILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;"
+bitmap_from_pixels : PixelArray → Int32 → Int32 → BitmapConfig → PrimIO Bitmap
+
+%foreign "dex:virtual:Landroid/view/MotionEvent;:getActionMasked:()I"
+motion_action : MotionEvent → PrimIO Int32
+%foreign "dex:virtual:Landroid/view/MotionEvent;:getX:()F"
+motion_x : MotionEvent → PrimIO CoordinateFloat
+%foreign "dex:virtual:Landroid/view/MotionEvent;:getY:()F"
+motion_y : MotionEvent → PrimIO CoordinateFloat
+%foreign "dex:static:Ljava/lang/Math;:round:(F)I"
+round_pixel : CoordinateFloat → Int32
+%foreign "dex:static:Ljava/lang/Long;:toHexString:(J)Ljava/lang/String;"
+hex_word : Int64 → Text
+%foreign "dex:static:Ljava/lang/Integer;:toString:(I)Ljava/lang/String;"
+region_key : Int32 → Text
+%foreign "dex:virtual:Landroid/app/Activity;:getSharedPreferences:(Ljava/lang/String;I)Landroid/content/SharedPreferences;"
+private_preferences : Activity → Text → Int32 → PrimIO Preferences
+%foreign "dex:interface:Landroid/content/SharedPreferences;:getInt:(Ljava/lang/String;I)I"
+read_label : Preferences → Text → Int32 → PrimIO Int32
+%foreign "dex:interface:Landroid/content/SharedPreferences;:edit:()Landroid/content/SharedPreferences$Editor;"
+edit_labels : Preferences → PrimIO Editor
+%foreign "dex:interface:Landroid/content/SharedPreferences$Editor;:putInt:(Ljava/lang/String;I)Landroid/content/SharedPreferences$Editor;"
+write_label : Editor → Text → Int32 → PrimIO Editor
+%foreign "dex:interface:Landroid/content/SharedPreferences$Editor;:commit:()Z"
+commit_labels : Editor → PrimIO Int32
+
+%foreign "dex:catch-io-unit"
+protect : IO () → (Throwable → IO ()) → PrimIO ()
+%foreign "dex:finally-io-unit"
+always : IO () → IO () → PrimIO ()
+%foreign "dex:virtual:Ljava/lang/Throwable;:toString:()Ljava/lang/String;"
+error_text : Throwable → PrimIO Text
+
+-- Exact generated methods and JNI ownership declarations in photo-jni.tsv.
+-- These two array methods use DISJOINT established backend policies.
+%foreign "C:photo_ingest,libphotosvm"
+ingest : Int32 → Int32 → Int32 → Int32 → PixelArray → PrimIO Int64
+%foreign "C:photo_overlay,libphotosvm"
+overlay : Int64 → PixelArray → PrimIO Int32
+%foreign "C:photo_release,libphotosvm"
+release : Int64 → PrimIO Int32
+%foreign "C:photo_cancel,libphotosvm"
+cancel : Int64 → PrimIO Int32
+%foreign "C:photo_width,libphotosvm"
+frame_width : Int64 → PrimIO Int32
+%foreign "C:photo_height,libphotosvm"
+frame_height : Int64 → PrimIO Int32
+%foreign "C:photo_count,libphotosvm"
+region_count : Int64 → PrimIO Int32
+%foreign "C:photo_at,libphotosvm"
+region_at : Int64 → Int32 → Int32 → PrimIO Int32
+%foreign "C:photo_touch,libphotosvm"
+region_at_view : Int64 → Int32 → Int32 → Int32 → Int32 → PrimIO Int32
+%foreign "C:photo_assert,libphotosvm"
+assert_region : Int64 → Int32 → Int32 → PrimIO Int32
+%foreign "C:photo_key,libphotosvm"
+image_key_part : Int64 → Int32 → PrimIO Int64
+
+%cg dex extends Landroid/app/Activity;
+%cg dex managed-field LIdric/Generated; state PhotoActivity.read_phase PhotoActivity.write_phase
+%cg dex override onCreate (Landroid/os/Bundle;)V create_activity
+%cg dex override before-parent onDestroy ()V destroy_activity
+%cg dex override onSaveInstanceState (Landroid/os/Bundle;)V save_activity
+%cg dex override onActivityResult (IILandroid/content/Intent;)V receive_picker
+%cg dex callback receiver Landroid/view/View$OnClickListener; onClick (Landroid/view/View;)V receive_click
+%cg dex callback receiver Landroid/view/View$OnTouchListener; onTouch (Landroid/view/View;Landroid/view/MotionEvent;)Z receive_touch
+
+identifier : ResourceTable → Text → Text → Text → IO Int32
+identifier table package kind name = primIO (resource_id table name kind package)
+
+initialized : Activity → IO (Maybe (IORef Live))
+initialized activity = do
+  phase ← primIO (read_phase activity)
+  current ← readIORef phase
+  pure (case current of Ready cell ⇒ Just cell; Closed ⇒ Nothing)
+
+status_text : Live → Text → IO ()
+status_text state message = primIO (set_status state.controls.status message)
+
+bind_activity : Activity → IO ()
+bind_activity activity = do
+  table ← primIO (resources activity)
+  package ← primIO (package_name activity)
+  layout ← identifier table package "layout" "activity_photo"
+  primIO (set_layout activity layout)
+  image_key ← identifier table package "id" "photo"
+  status_key ← identifier table package "id" "status"
+  pick_key ← identifier table package "id" "pick"
+  organic_key ← identifier table package "id" "organic"
+  inorganic_key ← identifier table package "id" "inorganic"
+  image ← primIO (find_view activity image_key)
+  status ← primIO (find_view activity status_key)
+  let controls = Bound (as_image image) (as_text status) pick_key organic_key inorganic_key
+  state ← newIORef (Running controls Nothing)
+  phase ← newIORef (Ready state)
+  primIO (write_phase activity phase)
+  for_ [pick_key, organic_key, inorganic_key] (\key ⇒ do
+    button ← primIO (find_view activity key)
+    primIO (on_click button (click_listener activity)))
+  -- A clickable ImageView consumes ACTION_DOWN so ACTION_UP reaches the
+  -- listener; merely registering OnTouchListener is insufficient.
+  primIO (set_clickable image 1)
+  primIO (on_touch image (touch_listener activity))
+  primIO (set_status (as_text status) "Choose a JPEG or PNG up to 1,048,576 pixels")
+
+-- A new overlay is published only after native completion and Bitmap creation.
+-- The previous Bitmap stays visible on native failure.
+show_frame : Live → Frame → IO Bool
+show_frame state frame = do
+  let pixel_count = frame.width * frame.height
+  if frame.width <= 0 || frame.height <= 0 ||
+     frame.width > 4096 || frame.height > 4096 || pixel_count > 1048576
+    then pure False
+    else do
+      buffer ← primIO (allocate_pixels pixel_count)
+      output ← primIO (backing_array buffer)
+      status ← primIO (overlay frame.handle output)
+      if status /= 0 then pure False else do
+        format ← primIO (bitmap_format "ARGB_8888")
+        bitmap ← primIO (bitmap_from_pixels output frame.width frame.height format)
+        primIO (set_bitmap state.controls.image bitmap)
+        pure True
+
+image_preferences : Activity → Int64 → IO Preferences
+image_preferences activity handle = do
+  first ← primIO (image_key_part handle 0)
+  second ← primIO (image_key_part handle 1)
+  third ← primIO (image_key_part handle 2)
+  fourth ← primIO (image_key_part handle 3)
+  let digest = hex_word first ++ "-" ++ hex_word second ++ "-" ++
+               hex_word third ++ "-" ++ hex_word fourth
+  primIO (private_preferences activity ("photo-regions-v1-" ++ digest) 0)
+
+restore_corrections : Preferences → Int64 → Int32 → Int32 → IO Bool
+restore_corrections preferences handle region count =
+  if region >= count then pure True else do
+    label ← primIO (read_label preferences (region_key region) 0)
+    if label == 0 then restore_corrections preferences handle (region + 1) count
+      else if label /= 1 && label /= 2 then pure False else do
+        outcome ← primIO (assert_region handle region label)
+        if outcome == 0 then restore_corrections preferences handle (region + 1) count
+          else pure False
+
+save_correction : Live → Frame → Int32 → Int32 → IO ()
+save_correction state frame region label =
+  primIO (protect (do
+    if region < 0 || region >= frame.count then status_text state "Stale region selection"
+      else do
+        editor ← primIO (edit_labels frame.correction_store)
+        updated ← primIO (write_label editor (region_key region) label)
+        committed ← primIO (commit_labels updated)
+        if committed == 0 then status_text state "Could not save region correction"
+          else do
+            result ← primIO (assert_region frame.handle region label)
+            visible ← if result == 0 then show_frame state frame else pure False
+            status_text state (if visible then "Saved human assertion"
+              else "Correction saved. Reopen the image to refresh the overlay"))
+    (\_ ⇒ status_text state "Could not complete correction"))
+
+process_bitmap : Activity → Uri → Bitmap → Int32 → Int32 → Int32 → IO ()
+process_bitmap activity uri bitmap width height orientation = do
+  cell ← initialized activity
+  case cell of
+    Nothing ⇒ pure ()
+    Just current ⇒ do
+      state ← readIORef current
+      source_buffer ← primIO (allocate_pixels (width * height))
+      source ← primIO (backing_array source_buffer)
+      primIO (get_pixels bitmap source 0 width 0 0 width height)
+      handle ← primIO (ingest width height width orientation source)
+      if handle == 0 then status_text state "Native frame rejected" else do
+        accepted ← newIORef False
+        primIO (always (do
+          dw ← primIO (frame_width handle)
+          dh ← primIO (frame_height handle)
+          count ← primIO (region_count handle)
+          preferences ← image_preferences activity handle
+          let frame = Accepted handle dw dh preferences count uri Nothing
+          restored ← restore_corrections preferences handle 0 count
+          visible ← if restored then show_frame state frame else pure False
+          if visible
+            then do
+              writeIORef current ({ current := Just frame } state)
+              writeIORef accepted True
+              case state.current of
+                Nothing ⇒ pure ()
+                Just old ⇒ do
+                  _ ← primIO (cancel old.handle)
+                  _ ← primIO (release old.handle)
+                  pure ()
+              status_text state "Green: organic. Cyan: inorganic. Unshaded: unknown."
+            else status_text state "No overlay published")
+          (do kept ← readIORef accepted
+              if kept then pure () else do
+                _ ← primIO (release handle)
+                pure ()))
+
+decode_photo : Activity → Uri → Text → Int32 → IO ()
+decode_photo activity uri path orientation = do
+  decoder ← primIO (new_decoder path 0)
+  if is_null (decoder_object decoder) == 1 then pure () else
+    primIO (always (do
+      width ← primIO (decode_width decoder)
+      height ← primIO (decode_height decoder)
+      if width <= 0 || height <= 0 ||
+         width > 4096 || height > 4096 || width * height > 1048576
+        then do
+          Just cell ← initialized activity | Nothing ⇒ pure ()
+          state ← readIORef cell
+          status_text state "Refused: image exceeds bounded decode limit"
+        else do
+          area ← primIO (rectangle 0 0 width height)
+          options ← primIO new_options
+          bitmap ← primIO (decode_region decoder area options)
+          if is_null (bitmap_object bitmap) == 1 then pure () else
+            primIO (always (process_bitmap activity uri bitmap width height orientation)
+                           (primIO (recycle_bitmap bitmap))))
+      (primIO (recycle_decoder decoder)))
+
+staging_chunk_size : Int32
+staging_chunk_size = 65536
+
+staging_limit : Int32
+staging_limit = 16777216
+
+write_staged_chunk : WriteChannel → ByteBuffer → Int32 → IO Bool
+write_staged_chunk sink buffer remaining =
+  if remaining == 0 then pure True else do
+    count ← primIO (write_chunk sink buffer)
+    if count <= 0 || count > remaining then pure False
+      else write_staged_chunk sink buffer (remaining - count)
+
+copy_encoded_photo : ReadChannel → WriteChannel → ByteBuffer → Int32 → IO Bool
+copy_encoded_photo source sink buffer remaining = do
+  _ ← primIO (clear_bytes (base_buffer buffer))
+  count ← primIO (read_chunk source buffer)
+  if count == (-1) then pure True
+    else if count <= 0 || count > staging_chunk_size || count > remaining then pure False
+    else do
+      _ ← primIO (flip_bytes (base_buffer buffer))
+      written ← write_staged_chunk sink buffer count
+      if written then copy_encoded_photo source sink buffer (remaining - count)
+        else pure False
+
+show_status : Activity → Text → IO ()
+show_status activity message = do
+  Just cell ← initialized activity | Nothing ⇒ pure ()
+  state ← readIORef cell
+  status_text state message
+
+-- Check the file signature before using the API 23 JPEG-only EXIF reader.
+-- A second InputStream from the URI could return a different provider object.
+read_orientation : PhotoFile → Text → IORef Int32 → IO ()
+read_orientation staged path orientation = do
+  input ← primIO (open_staging_input staged)
+  primIO (always (do
+    first ← primIO (read_header_byte input)
+    second ← primIO (read_header_byte input)
+    if first == 255 && second == 216 then do
+      metadata ← primIO (read_jpeg_metadata path)
+      tag ← primIO (metadata_tag metadata "Orientation" 0)
+      writeIORef orientation (if tag == 0 then 1 else tag)
+      else if first == 137 && second == 80 then do
+        third ← primIO (read_header_byte input)
+        fourth ← primIO (read_header_byte input)
+        fifth ← primIO (read_header_byte input)
+        sixth ← primIO (read_header_byte input)
+        seventh ← primIO (read_header_byte input)
+        eighth ← primIO (read_header_byte input)
+        if third == 78 && fourth == 71 && fifth == 13 && sixth == 10 &&
+           seventh == 26 && eighth == 10 then writeIORef orientation 1 else pure ()
+      else pure ()) (primIO (close_staging_input input)))
+
+stage_and_decode : Activity → Uri → Stream → PhotoFile → IO ()
+stage_and_decode activity uri source staged = do
+  copied ← newIORef False
+  sink ← primIO (open_staging_output staged)
+  primIO (always (do
+    buffer ← primIO (allocate_bytes staging_chunk_size)
+    reader ← primIO (staging_source source)
+    writer ← primIO (staging_sink sink)
+    complete ← copy_encoded_photo reader writer buffer staging_limit
+    writeIORef copied complete) (primIO (close_staging_output sink)))
+  completed ← readIORef copied
+  if completed
+    then do
+      path ← primIO (file_path staged)
+      orientation ← newIORef 0
+      read_orientation staged path orientation
+      value ← readIORef orientation
+      if value < 1 || value > 8 then show_status activity "Unsupported image or orientation"
+        else decode_photo activity uri path value
+    else show_status activity "Encoded image exceeds 16 MiB or the stream stopped"
+
+load_photo : Activity → Uri → IO ()
+load_photo activity uri = do
+  resolver ← primIO (content_resolver activity)
+  directory ← primIO (cache_directory activity)
+  staged ← primIO (new_staged_file "photo-" ".stage" directory)
+  primIO (always (do
+    stream ← primIO (open_stream resolver uri)
+    if is_null (stream_object stream) == 1 then show_status activity "Could not open image"
+      else primIO (always (stage_and_decode activity uri stream staged) (primIO (close_stream stream))))
+    (do _ ← primIO (delete_file staged)
+        pure ()))
+
+report_failure : Activity → Throwable → IO ()
+report_failure activity failure = do
+  maybe_cell ← initialized activity
+  case maybe_cell of
+    Nothing ⇒ pure ()
+    Just cell ⇒ do
+      state ← readIORef cell
+      description ← primIO (error_text failure)
+      status_text state ("Image failed: " ++ description)
+
+%export "dex:create_activity"
+create_activity : Activity → Bundle → IO ()
+create_activity activity saved = do
+  bind_activity activity
+  if is_null (bundle_object saved) == 1 then pure () else do
+    path ← primIO (read_saved_uri saved "active-photo" "")
+    if path == "" then pure () else do
+      uri ← primIO (parse_uri path)
+      primIO (protect (load_photo activity uri) (report_failure activity))
+
+%export "dex:save_activity"
+save_activity : Activity → Bundle → IO ()
+save_activity activity saved = do
+  Just cell ← initialized activity | Nothing ⇒ pure ()
+  state ← readIORef cell
+  case state.current of
+    Nothing ⇒ pure ()
+    Just frame ⇒ do
+      path ← primIO (uri_text frame.original_uri)
+      primIO (write_saved_uri saved "active-photo" path)
+
+%export "dex:receive_picker"
+receive_picker : Activity → Int32 → Int32 → Intent → IO ()
+receive_picker activity request result intent =
+  if request /= 7 || result /= (-1) || is_null (intent_object intent) == 1
+    then pure () -- canceled or unrelated: retain the prior frame
+    else do
+      uri ← primIO (picked_uri intent)
+      if is_null (uri_object uri) == 1 then pure () else
+        primIO (protect (load_photo activity uri) (report_failure activity))
+
+%export "dex:receive_click"
+receive_click : Activity → View → IO ()
+receive_click activity view = do
+  maybe_cell ← initialized activity
+  case maybe_cell of
+    Nothing ⇒ pure ()
+    Just cell ⇒ do
+      state ← readIORef cell
+      selected_button ← primIO (view_id view)
+      if selected_button == state.controls.pick_id
+        then do
+          intent ← primIO (new_intent "android.intent.action.OPEN_DOCUMENT")
+          _ ← primIO (add_category intent "android.intent.category.OPENABLE")
+          _ ← primIO (set_type intent "image/*")
+          primIO (open_picker activity intent 7)
+        else case state.current of
+          Nothing ⇒ pure ()
+          Just frame ⇒ case frame.selected of
+            Nothing ⇒ status_text state "Tap a region before assigning a label"
+            Just selected ⇒ do
+              let label = if selected_button == state.controls.organic_id then 1
+                            else if selected_button == state.controls.inorganic_id then 2
+                            else 0
+              if label == 0 then pure () else save_correction state frame selected label
+
+%export "dex:receive_touch"
+receive_touch : Activity → View → MotionEvent → IO Bool
+receive_touch activity view motion = do
+  action ← primIO (motion_action motion)
+  if action /= 1 then pure False else do
+    maybe_cell ← initialized activity
+    case maybe_cell of
+      Nothing ⇒ pure False
+      Just cell ⇒ do
+        state ← readIORef cell
+        case state.current of
+          Nothing ⇒ pure False
+          Just frame ⇒ do
+            width ← primIO (view_width view)
+            height ← primIO (view_height view)
+            x ← primIO (motion_x motion)
+            y ← primIO (motion_y motion)
+            id ← primIO (region_at_view frame.handle width height
+                              (round_pixel x) (round_pixel y))
+            if id < 0 then pure False else do
+              writeIORef cell ({ current := Just ({ selected := Just id } frame) } state)
+              status_text state ("Region " ++ cast id ++ ": choose Organic or Inorganic")
+              pure True
+
+%export "dex:destroy_activity"
+destroy_activity : Activity → IO ()
+destroy_activity activity = primIO (protect (do
+  phase ← primIO (read_phase activity)
+  previous ← readIORef phase
+  writeIORef phase Closed
+  case previous of
+    Closed ⇒ pure ()
+    Ready cell ⇒ do
+      state ← readIORef cell
+      case state.current of
+        Nothing ⇒ pure ()
+        Just frame ⇒ do
+          _ ← primIO (cancel frame.handle)
+          _ ← primIO (release frame.handle)
+          pure ()) (\_ ⇒ pure ()))
+
+main : IO ()
+main = pure ()

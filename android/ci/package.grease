@@ -1,0 +1,94 @@
+#!/usr/bin/env grease
+set -eu -o pipefail
+# Adapted structurally from Explorer PR #33's pure direct-DEX APK builder.
+# Produces an UNSIGNED local qualification APK. Signing and deployment separate.
+if (len(ARGV) < 6 or len(ARGV) > 7) {
+  echo 'usage: grease package.grease PHOTO_REPOSITORY SDK NDK DEX_EVIDENCE NATIVE_EVIDENCE_ROOT FRESH_OUTPUT [c67]' >&2
+  exit 2
+}
+var repo=ARGV[0]
+var sdk=ARGV[1]
+var ndk=ARGV[2]
+var dex=ARGV[3]
+var native=ARGV[4]
+var out=ARGV[5]
+for path in "$repo" "$sdk" "$ndk" "$dex" "$native" "$out" {
+  if (path[0] !== '/') { echo 'FAIL absolute paths required' >&2; exit 2 }
+}
+var abis=['arm64-v8a','armeabi-v7a','x86_64']
+if (len(ARGV) === 7) {
+  if (ARGV[6] !== 'c67') { echo 'FAIL unknown profile' >&2; exit 2 }
+  setvar abis=['arm64-v8a']
+}
+if test -e "$out" { echo 'FAIL refusing existing output' >&2; exit 1 }
+var tools="$sdk/build-tools/35.0.1"
+var aapt2="$tools/aapt2"
+var align="$tools/zipalign"
+var readelf="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+var platform="$sdk/platforms/android-35/android.jar"
+for tool in "$aapt2" "$align" "$readelf" { test -x "$tool" }
+test -s "$platform"
+rg '^Pkg.Revision[[:space:]]*=[[:space:]]*35\.0\.1$' "$tools/source.properties"
+rg '^Pkg.Revision[[:space:]]*=[[:space:]]*29\.0\.14206865$' "$ndk/source.properties"
+for tool in zip unzip sha256sum cmp rg touch { command -v "$tool" }
+test -s "$dex/candidate.dex"
+rg -x 'source_to_DEX[[:space:]]PASS' "$dex/result.tsv"
+rg -e '^\.class .* Lorg/isomorphisms/photosvm/PhotoActivity;$' \
+  "$dex/decoded/org/isomorphisms/photosvm/PhotoActivity.smali"
+rg -x -F 'library photosvm' "$repo/android/dex/photo-jni.tsv"
+mkdir -p "$out/res/layout" "$out/res/values" "$out/payload/lib" "$out/evidence" "$out/payload/assets/licenses"
+cp "$repo/android/res/layout/activity_photo.xml" "$out/res/layout/"
+cp "$repo/android/res/values/strings.xml" "$out/res/values/"
+cp "$repo/android/AndroidManifest.xml" "$out/AndroidManifest.xml"
+cp "$dex/candidate.dex" "$out/payload/classes.dex"
+cp "$repo/android/native/LICENSE.cgw-sha256" "$out/payload/assets/licenses/LICENSE.cgw-sha256"
+var native_entries=[]
+for abi in (abis) {
+  var build="$native/$abi"
+  test -s "$build/libphotosvm.so"
+  rg -x 'ick_native_source[[:space:]]PASS' "$build/result.tsv"
+  rg -x "ABI[[:space:]]$abi" "$build/result.tsv"
+  mkdir -p "$out/payload/lib/$abi" "$out/evidence/$abi"
+  cp "$build/libphotosvm.so" "$out/payload/lib/$abi/"
+  call native_entries->append("lib/$abi/libphotosvm.so")
+  cp "$build/result.tsv" "$build/artifacts.sha256" "$out/evidence/$abi/"
+  "$readelf" -d "$build/libphotosvm.so" > "$out/evidence/$abi/elf.txt"
+  rg -F 'libphotosvm.so' "$out/evidence/$abi/elf.txt"
+}
+sha256sum "$repo/android/dex/PhotoActivity.idric" \
+  "$repo/android/dex/photo-jni.tsv" "$repo/android/AndroidManifest.xml" \
+  "$repo/android/res/layout/activity_photo.xml" \
+  "$repo/android/res/values/strings.xml" > "$out/evidence/source.sha256"
+sha256sum "$aapt2" "$align" "$platform" > "$out/evidence/platform.sha256"
+setglobal ENV.TZ='UTC'
+"$aapt2" compile --dir "$out/res" -o "$out/resources.zip"
+"$aapt2" link -o "$out/resources.apk" --manifest "$out/AndroidManifest.xml" \
+  -I "$platform" --min-sdk-version 23 --target-sdk-version 35 \
+  --version-code 1 --version-name 0.1 "$out/resources.zip"
+cp "$out/resources.apk" "$out/unaligned.apk"
+cd "$out/payload"
+touch -t 198001010000.00 classes.dex @native_entries assets/licenses/LICENSE.cgw-sha256
+zip -X -0 "$out/unaligned.apk" classes.dex @native_entries assets/licenses/LICENSE.cgw-sha256
+var apk="$out/photo-svm-unsigned.apk"
+"$align" -P 16 -f -v 4 "$out/unaligned.apk" "$apk" > "$out/evidence/alignment.txt"
+"$align" -P 16 -c -v 4 "$apk" >> "$out/evidence/alignment.txt"
+unzip -t "$apk" > "$out/evidence/zip-test.txt"
+unzip -Z1 "$apk" > "$out/evidence/entries.txt"
+test $(rg -c '^classes[0-9]*\.dex$' "$out/evidence/entries.txt") = 1
+for entry in classes.dex @native_entries assets/licenses/LICENSE.cgw-sha256 {
+  test $(rg -c -x -F "$entry" "$out/evidence/entries.txt") = 1
+}
+try { rg '\.(class|java|kt|jar)$|(^|/)META-INF/' "$out/evidence/entries.txt" }
+if (_error.code !== 1) { echo 'FAIL forbidden candidate payload' >&2; exit 1 }
+mkdir -p "$out/verify"
+unzip -q "$apk" classes.dex 'lib/*' -d "$out/verify"
+cmp "$dex/candidate.dex" "$out/verify/classes.dex"
+for abi in (abis) {
+  cmp "$native/$abi/libphotosvm.so" "$out/verify/lib/$abi/libphotosvm.so"
+}
+"$aapt2" dump badging "$apk" > "$out/evidence/badging.txt"
+rg -F "package: name='org.isomorphisms.photosvm'" "$out/evidence/badging.txt"
+rg -F "launchable-activity: name='org.isomorphisms.photosvm.PhotoActivity'" "$out/evidence/badging.txt"
+sha256sum "$apk" "$dex/candidate.dex" > "$out/evidence/apk.sha256"
+printf 'unsigned_checked_DEX_APK\tPASS\ninstalled_ART\tNOT_RUN\nC67\tNOT_RUN\nrelease_signing\tNOT_RUN\n' > "$out/result.tsv"
+for abi in (abis) { printf 'qualified_native_ABI\t%s\n' "$abi" >> "$out/result.tsv" }

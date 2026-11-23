@@ -1,0 +1,45 @@
+name: Photo region and JNI adapter host tests
+
+on:
+  pull_request:
+    paths:
+      - 'android/**'
+      - '.github/workflows/adapter-host.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adapter-host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: isomorphisms/ai-ci/ick-host@618223d47315a180851c1539197cdcdb761a4b0d
+        id: ick
+      - name: Compile and exercise the region engine and JNI adapter
+        env:
+          EXPECTED_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+          ICK: ${{ steps.ick.outputs.compiler }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_REVISION"
+          test -s "$JAVA_HOME/include/jni.h"
+          test -s "$JAVA_HOME/include/linux/jni_md.h"
+          make -C android test-host OUT="$RUNNER_TEMP/photo-adapter-host" \
+            CFLAGS='-std=c11 -O2 -g -Wall -Wextra -Werror -pedantic -fno-link-libatomic'
+          printf '%s\n' "$EXPECTED_REVISION" > "$RUNNER_TEMP/photo-adapter-host/source-commit.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: photo-adapter-host-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/photo-adapter-host/checkpoint.sha256
+            ${{ runner.temp }}/photo-adapter-host/source-commit.txt
+          if-no-files-found: error
